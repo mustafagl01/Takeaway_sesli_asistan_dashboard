@@ -1,6 +1,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
 import PricingSlider from '@/components/PricingSlider';
+import PricingTiers from '@/components/PricingTiers';
 import ActiveSubscriptionWidget from '@/components/ActiveSubscriptionWidget';
 
 export default async function BillingPage() {
@@ -27,6 +28,12 @@ export default async function BillingPage() {
                     <ActiveSubscriptionWidget />
                 </div>
 
+                {/* Pricing Tier Cards — at-a-glance comparison */}
+                <div className="mb-16">
+                    <PricingTiers />
+                </div>
+
+                {/* Interactive Slider — fine-tune exact minutes */}
                 <div className="mt-8">
                     <PricingSlider />
                 </div>
