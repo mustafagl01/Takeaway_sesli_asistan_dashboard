@@ -28,13 +28,13 @@ function getStripe(): Stripe {
  * @returns Total price in pennies (integer)
  */
 function calculatePriceInPennies(minutes: number): number {
-    let rate = 0.20;
-    if (minutes > 1000) {
-        rate = 0.15;
-    } else if (minutes > 500) {
-        rate = 0.17;
+    let rate = 0.18;
+    if (minutes > 800) {
+        rate = 0.14;
+    } else if (minutes > 400) {
+        rate = 0.16;
     } else {
-        rate = 0.20;
+        rate = 0.18;
     }
 
     // Calculate total, convert to pennies and handle rounding
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
                         currency: 'gbp',
                         product_data: {
                             name: `Haftalık Paket (${minutes} Dakika)`,
-                            description: `Yapay zeka asistanı için haftalık ${minutes} dakika kullanım hakkı.`,
+                            description: `Haftalık ${minutes} dakika telefon görüşme trafiği için kullanım hakkı.`,
                         },
                         unit_amount: totalPennies,
                     },

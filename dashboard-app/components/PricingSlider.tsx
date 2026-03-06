@@ -22,17 +22,17 @@ export default function PricingSlider() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        let currentRate = 0.20;
+        let currentRate = 0.18;
         let currentTier: 'Small' | 'Medium' | 'Pro' = 'Small';
 
-        if (minutes > 1000) {
-            currentRate = 0.15;
+        if (minutes > 800) {
+            currentRate = 0.14;
             currentTier = 'Pro';
-        } else if (minutes > 500) {
-            currentRate = 0.17;
+        } else if (minutes > 400) {
+            currentRate = 0.16;
             currentTier = 'Medium';
         } else {
-            currentRate = 0.20;
+            currentRate = 0.18;
             currentTier = 'Small';
         }
 
@@ -147,10 +147,7 @@ export default function PricingSlider() {
                                 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
                             }`}
                     >
-                        {tier === 'Small' && <span>🌱</span>}
-                        {tier === 'Medium' && <span>🚀</span>}
-                        {tier === 'Pro' && <span>💎</span>}
-                        {tier} Kademe Modu
+                        {tier === 'Small' ? 'Small' : tier === 'Medium' ? 'Medium' : 'Pro'} Kademe Modu
                     </motion.div>
                 </AnimatePresence>
 
@@ -162,11 +159,22 @@ export default function PricingSlider() {
                             exit={{ opacity: 0, scale: 0.9 }}
                             className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 p-3 rounded-lg border border-green-200 dark:border-green-800 text-sm font-medium flex items-center gap-2 shadow-sm"
                         >
-                            <span className="animate-bounce">🔥</span> Bir tık daha kaydır! 401 dakika yaparsan toplam fiyatın düşecek.
+                            <span className="animate-bounce">🔥</span> Bir tık daha kaydır! 401 dakika yaparsan birim fiyatın 16p'ye düşecek.
                         </motion.div>
                     )}
 
-                    {minutes > 400 && minutes <= 405 && (
+                    {minutes === 800 && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 p-3 rounded-lg border border-green-200 dark:border-green-800 text-sm font-medium flex items-center gap-2 shadow-sm"
+                        >
+                            <span className="animate-bounce">🔥</span> 801 dakika yaparsan birim fiyatın 14p'ye (en ucuz) düşecek!
+                        </motion.div>
+                    )}
+
+                    {((minutes > 400 && minutes <= 405) || (minutes > 800 && minutes <= 805)) && (
                         <motion.div
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
