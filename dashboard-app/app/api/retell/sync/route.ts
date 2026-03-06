@@ -65,13 +65,11 @@ export async function POST(): Promise<NextResponse> {
 
     // Calculate Customer Cost based on Active Subscription or Pay-As-You-Go
     let customerCostCents: number | null = null;
-    if (call.duration != null && activeSubscription && activeSubscription.rate_pence) {
+    if (call.duration != null) {
       // call.duration is in SECONDS (retell.ts converts duration_ms → seconds)
       const minutesUsed = Math.ceil(call.duration / 60);
-      customerCostCents = minutesUsed * activeSubscription.rate_pence;
-    } else if (costCents != null) {
-      // Pay-as-you-go: no subscription → use Retell's own call cost
-      customerCostCents = costCents;
+      const ratePence = (activeSubscription && activeSubscription.rate_pence) ? activeSubscription.rate_pence : 20; // Default Pay As You Go rate is 20p/min
+      customerCostCents = minutesUsed * ratePence;
     }
 
     const cacheResult = await cacheCall({
