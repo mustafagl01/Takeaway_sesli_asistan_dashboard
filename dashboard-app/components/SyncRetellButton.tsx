@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { useVisualAudio } from './VisualAudioProvider';
 
 export default function SyncRetellButton() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const { playClick, playHover, playSuccess, triggerConfetti } = useVisualAudio();
 
   const handleSync = async () => {
+    playClick();
     setLoading(true);
     setMessage(null);
     try {
@@ -22,6 +25,10 @@ export default function SyncRetellButton() {
       }
 
       const { synced, failed, total } = data.data ?? {};
+      if (synced > 0) {
+        playSuccess();
+        triggerConfetti();
+      }
       setMessage({
         type: 'success',
         text: total === 0
@@ -44,26 +51,31 @@ export default function SyncRetellButton() {
     <div className="flex flex-col items-end gap-1">
       <button
         type="button"
+        onMouseEnter={playHover}
         onClick={handleSync}
         disabled={loading}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 text-sm font-medium"
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 text-sm font-medium hover-lift glass-morphism transition-all duration-300 active:scale-95"
       >
         {loading ? (
           <>
-            <span className="inline-block w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-            Syncing…
+            <span className="inline-block w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span className="animate-pulse">Syncing…</span>
           </>
         ) : (
-          <>Sync from Retell</>
+          <>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Sync from Retell
+          </>
         )}
       </button>
       {message && (
         <p
-          className={`text-sm ${
-            message.type === 'success'
-              ? 'text-green-600 dark:text-green-400'
-              : 'text-red-600 dark:text-red-400'
-          }`}
+          className={`text-sm ${message.type === 'success'
+            ? 'text-green-600 dark:text-green-400'
+            : 'text-red-600 dark:text-red-400'
+            }`}
         >
           {message.text}
         </p>

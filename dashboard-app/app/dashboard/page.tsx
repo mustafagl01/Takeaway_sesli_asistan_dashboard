@@ -178,7 +178,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Recent Activity Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 glass-morphism border border-white/20 dark:border-white/5 shadow-blue-500/5">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Recent Activity
           </h2>
@@ -388,15 +388,15 @@ interface MetricCardProps {
  */
 function MetricCard({ title, value, subtitle, icon, color }: MetricCardProps) {
   const colorClasses = {
-    blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
-    green: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
-    purple: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
-    amber: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
-    indigo: 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800',
+    blue: 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-200/50 dark:border-blue-800/30 shadow-blue-500/5',
+    green: 'bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/30 shadow-green-500/5',
+    purple: 'bg-purple-50/50 dark:bg-purple-900/10 border-purple-200/50 dark:border-purple-800/30 shadow-purple-500/5',
+    amber: 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-200/50 dark:border-amber-800/30 shadow-amber-500/5',
+    indigo: 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-200/50 dark:border-indigo-800/30 shadow-indigo-500/5',
   };
 
   return (
-    <div className={`${colorClasses[color]} border rounded-lg p-6`}>
+    <div className={`${colorClasses[color]} border rounded-xl p-6 hover-lift glass-morphism backdrop-blur-md`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -457,7 +457,7 @@ function CallListItem({ call }: CallListItemProps) {
     statusColors[call.status] || statusColors.cancelled;
 
   return (
-    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+    <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-white/5 backdrop-blur-sm rounded-lg hover:bg-white dark:hover:bg-white/10 hover-lift transition-all duration-300 border border-transparent hover:border-blue-500/20 shadow-sm hover:shadow-md">
       <div className="flex-1">
         <div className="flex items-center gap-3">
           <div className="flex-shrink-0">

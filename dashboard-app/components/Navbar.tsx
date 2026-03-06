@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { signOut, useSession } from 'next-auth/react'
 import Link from 'next/link'
+import { useVisualAudio } from './VisualAudioProvider'
 
 /**
  * Navigation link definition
@@ -29,6 +30,7 @@ export default function Navbar({ className = '' }: NavbarProps) {
   const { data: session, status } = useSession()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const { playClick, playHover } = useVisualAudio()
 
   const navLinks: NavLink[] = [
     {
@@ -125,8 +127,10 @@ export default function Navbar({ className = '' }: NavbarProps) {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActiveLink(link.href)
-                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                onMouseEnter={playHover}
+                onClick={playClick}
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 hover-lift ${isActiveLink(link.href)
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
                   }`}
               >
