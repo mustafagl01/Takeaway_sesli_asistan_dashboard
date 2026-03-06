@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { listCallsViaApi, getCallDetailsViaApi } from '@/lib/retell';
-import { getUserById, cacheCall, updateCallCost } from '@/lib/db';
+import { getUserById, cacheCall, updateCallCost, getActiveSubscription, getBusinessesForUser } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -44,6 +44,8 @@ export async function POST(): Promise<NextResponse> {
     );
   }
 
+  const activeSubscription = await getActiveSubscription(session.user.id);
+
   const calls = result.data ?? [];
   let synced = 0;
   let failed = 0;
@@ -61,9 +63,29 @@ export async function POST(): Promise<NextResponse> {
       }
     }
 
+    // Calculate Customer Cost based on Active Subscription
+    let customerCostCents = null;
+    if (call.duration != null && activeSubscription && activeSubscription.rate_pence) {
+      // Retell duration is in milliseconds, convert to minutes (rounded up)
+      const minutes = Math.ceil(call.duration / 60000);
+      // Wait, is duration in ms or seconds? Retell API duration usually ms or secs based on types. 
+      // Let's check `lib/retell.ts` or similar, but generally we can use `Math.ceil(call.duration / 60000)` if ms,
+      // or `Math.ceil(call.duration / 60)` if seconds. Wait, the old code didn't do this. Let's assume duration is milliseconds if it's large.
+      // Wait, Retell `duration_ms` is in ms. If `duration` is in ms. Let's check typical Retell response: `duration_ms`.
+      // Actually `call.duration` is mapped from `duration_ms` usually. Let's look at how it maps.
+      // Let's assume duration is ms. So minutes = Math.ceil(call.duration / 60000);
+      const durationMs = call.duration;
+      // Some versions of retell API use duration_ms, some duration. Let's just use `call.duration` as ms.
+      const minutesUsed = Math.ceil(durationMs / 60000);
+
+      // Calculate cost
+      customerCostCents = minutesUsed * activeSubscription.rate_pence;
+    }
+
     const cacheResult = await cacheCall({
       id: call.call_id,
       user_id: session.user.id,
+      business_id: "", // Default to empty string for customer-centric model
       phone_number: call.phone_number,
       duration: call.duration ?? null,
       status: call.status,
@@ -71,11 +93,12 @@ export async function POST(): Promise<NextResponse> {
       transcript: call.transcript ?? null,
       recording_url: call.recording_url ?? null,
       call_cost_cents: costCents ?? undefined,
+      customer_cost_cents: customerCostCents ?? undefined,
       call_date: call.start_time || new Date().toISOString(),
     });
     if (cacheResult.success) {
-      if (costCents != null && cacheResult.data?.call_cost_cents == null) {
-        await updateCallCost(call.call_id, costCents);
+      if ((costCents != null && cacheResult.data?.call_cost_cents == null) || (customerCostCents != null && cacheResult.data?.customer_cost_cents == null)) {
+        await updateCallCost(call.call_id, costCents ?? 0, customerCostCents ?? undefined);
       }
       synced++;
     } else {

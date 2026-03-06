@@ -11,12 +11,9 @@
 
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
-
-import { getCallMetrics, getRecentCalls, type Call } from '@/lib/db';
-
-// ============================================================================
-// Type Definitions
-// ============================================================================
+import { cookies } from 'next/headers';
+import { getCallMetrics, getRecentCalls, getBusinessesForUser, type Call } from '@/lib/db';
+import ActiveSubscriptionWidget from '@/components/ActiveSubscriptionWidget';
 
 /**
  * Dashboard metrics data
@@ -31,57 +28,29 @@ interface DashboardMetrics {
   total_cost_cents: number;
 }
 
-// ============================================================================
-// Server Component - Dashboard Home
-// ============================================================================
-
-/**
- * Dashboard Home Page Component
- *
- * Server component that fetches and displays call metrics and recent activity.
- * Requires authenticated session via NextAuth.js.
- *
- * Features:
- * - Total calls count (all time)
- * - Average call duration (in seconds)
- * - Call completion rate (percentage)
- * - Recent activity list (last 10 calls)
- * - Responsive metrics cards layout
- * - Dark mode support
- *
- * @returns Dashboard home page JSX or redirects to login
- *
- * @example
- * // Access at http://localhost:3000/dashboard
- * // Requires valid authentication session
- */
 export default async function DashboardPage() {
-  // Get current session (authentication check)
   const session = await auth();
-
-  // Redirect unauthenticated users to login
   if (!session || !session.user?.id) {
     redirect('/login');
   }
 
-  // Fetch call metrics for the user
-  const metricsResult = await getCallMetrics(session.user.id);
-
-  // Fetch recent calls (last 10)
-  const recentCallsResult = await getRecentCalls(session.user.id, 10);
+  // Fetch data globally for the user (or default business)
+  // Note: For now, we fetch without filtering by business_id to show all user data
+  const metricsResult = await getCallMetrics(''); // Pass empty string to fetch all or adjust as needed
+  const recentCallsResult = await getRecentCalls('', 10);
 
   // Extract metrics with fallback values
   const metrics: DashboardMetrics = metricsResult.success && metricsResult.data
     ? metricsResult.data
     : {
-        total_calls: 0,
-        completed_calls: 0,
-        missed_calls: 0,
-        failed_calls: 0,
-        avg_duration: 0,
-        completion_rate: 0,
-        total_cost_cents: 0,
-      };
+      total_calls: 0,
+      completed_calls: 0,
+      missed_calls: 0,
+      failed_calls: 0,
+      avg_duration: 0,
+      completion_rate: 0,
+      total_cost_cents: 0,
+    };
 
   // Extract recent calls with fallback
   const recentCalls: Call[] = recentCallsResult.success && recentCallsResult.data
@@ -194,6 +163,12 @@ export default async function DashboardPage() {
             }
             color="amber"
           />
+
+        </div>
+
+        {/* Active Subscription Widget */}
+        <div className="mb-8">
+          <ActiveSubscriptionWidget />
         </div>
 
         {/* Recent Activity Section */}
@@ -229,7 +204,7 @@ interface MetricCardProps {
   value: string;
   subtitle: string;
   icon: React.ReactNode;
-  color: 'blue' | 'green' | 'purple' | 'amber';
+  color: 'blue' | 'green' | 'purple' | 'amber' | 'indigo';
 }
 
 /**
@@ -247,6 +222,7 @@ function MetricCard({ title, value, subtitle, icon, color }: MetricCardProps) {
     green: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
     purple: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
     amber: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
+    indigo: 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800',
   };
 
   return (
