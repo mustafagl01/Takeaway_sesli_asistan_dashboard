@@ -10,20 +10,18 @@ function getStripe(): Stripe {
     if (!_stripe) {
         const key = process.env.STRIPE_SECRET_KEY;
         if (!key) throw new Error('STRIPE_SECRET_KEY is not set');
-        _stripe = new Stripe(key, { apiVersion: '2025-02-24-preview' as any });
+        _stripe = new Stripe(key);
     }
     return _stripe;
 }
 
 /**
- * Calculates the weekly price based on input minutes and tiers.
+ * Calculates the price based on input minutes and tiers.
  * Tiers (Matching PricingSlider.tsx):
- * - 200-400: 20p/min
- * - 401-800: 18p/min
- * - 200-400: 18p/min
- * - 401-800: 16p/min
- * - 801+: 14p/min
- * 
+ * - 200-400: 18p/min (Small)
+ * - 401-800: 16p/min (Medium)
+ * - 801+:    14p/min (Pro)
+ *
  * @param minutes - Number of minutes selected
  * @returns Total price in pennies (integer)
  */
@@ -39,6 +37,15 @@ function calculatePriceInPennies(minutes: number): number {
 
     // Calculate total, convert to pennies and handle rounding
     return Math.round(minutes * rate * 100);
+}
+
+/**
+ * Determines the tier name based on minute count
+ */
+function getTierName(minutes: number): string {
+    if (minutes > 800) return 'Pro';
+    if (minutes > 400) return 'Medium';
+    return 'Small';
 }
 
 export async function POST(req: Request) {
@@ -61,16 +68,15 @@ export async function POST(req: Request) {
         // 3. Check Stripe Configuration
         if (!process.env.STRIPE_SECRET_KEY) {
             console.error('Missing STRIPE_SECRET_KEY in environment');
-            // In demo mode or if key is missing, we might want to return a dummy response
-            // but for this implementation we assume it will be set.
             return NextResponse.json({ error: 'Stripe configuration missing' }, { status: 500 });
         }
 
         // 4. Calculate Total Price
         const totalPennies = calculatePriceInPennies(minutes);
-        const totalPounds = (totalPennies / 100).toFixed(2);
+        const tierName = getTierName(minutes);
+        const rateP = minutes > 800 ? 14 : minutes > 400 ? 16 : 18;
 
-        // 5. Create Stripe Checkout Session
+        // 5. Create Stripe Checkout Session (one-time payment for prepaid minutes)
         const checkoutSession = await getStripe().checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [
@@ -78,8 +84,8 @@ export async function POST(req: Request) {
                     price_data: {
                         currency: 'gbp',
                         product_data: {
-                            name: `Haftalık Paket (${minutes} Dakika)`,
-                            description: `Haftalık ${minutes} dakika telefon görüşme trafiği için kullanım hakkı.`,
+                            name: `${tierName} Dakika Paketi — ${minutes} DK`,
+                            description: `${minutes} dakika ön ödemeli kullanım hakkı (${rateP}p/dk). Dakikalar bitene kadar geçerlidir.`,
                         },
                         unit_amount: totalPennies,
                     },
@@ -92,7 +98,8 @@ export async function POST(req: Request) {
             metadata: {
                 userId: session.user.id,
                 minutes: minutes.toString(),
-                type: 'weekly_minutes',
+                tier: tierName,
+                type: 'prepaid_minutes',
             },
             customer_email: session.user.email || undefined,
         });

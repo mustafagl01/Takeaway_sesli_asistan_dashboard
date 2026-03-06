@@ -73,7 +73,7 @@ export default function PricingSlider() {
                     İhtiyacın Kadar Dakika Seç
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400">
-                    Haftalık görüşme hacmine göre paketini anlık oluştur.
+                    Dakika paketini oluştur, bitene kadar kullan. Süre sınırı yok.
                 </p>
             </div>
 
@@ -98,7 +98,7 @@ export default function PricingSlider() {
                         £{price.toFixed(2)}
                     </motion.span>
                 </AnimatePresence>
-                <span className="text-gray-500 dark:text-gray-400 font-medium">/ hafta</span>
+                <span className="text-gray-500 dark:text-gray-400 font-medium">toplam</span>
             </div>
 
             {/* Slider */}
@@ -205,7 +205,7 @@ export default function PricingSlider() {
             </button>
 
             <p className="mt-4 text-center text-xs text-gray-400">
-                * Dakika aşımları seçilen kademenin birim fiyatı üzerinden ({(rate * 100).toFixed(0)}p) ücretlendirilir.
+                * Satın aldığınız dakikalar bitene kadar geçerlidir, süre sınırı yoktur. Dakikalar bittiğinde yeni paket satın alabilirsiniz.
             </p>
         </div>
     );

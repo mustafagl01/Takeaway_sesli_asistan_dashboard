@@ -19,8 +19,7 @@ export default async function BillingPage() {
                         Paket Yönetimi ve Ödeme
                     </h1>
                     <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                        İhtiyacınıza en uygun dakikayı seçin. Sadece kullandığınız kadar öder,
-                        fazladan personel maliyetinden kurtulursunuz.
+                        İhtiyacınıza en uygun dakika paketini seçin. Satın aldığınız dakikaları bitene kadar kullanın, süre sınırı olmadan esnekliğin tadını çıkarın.
                     </p>
                 </div>
 
