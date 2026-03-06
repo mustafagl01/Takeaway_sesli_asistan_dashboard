@@ -3,6 +3,8 @@ import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { getCallsByUserId, getCallsByDateRange, getCallsByStatus, getCallsByPhoneNumber, getTotalCostCents, type Call } from '@/lib/db';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 
 export async function GET(request: NextRequest) {
   try {

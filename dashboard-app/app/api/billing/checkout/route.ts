@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import Stripe from 'stripe';
 
+export const dynamic = 'force-dynamic';
+
 // Initialize Stripe with the secret key from environment variables
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
     apiVersion: '2025-02-24-preview' as any, // Standard latest or fallback
