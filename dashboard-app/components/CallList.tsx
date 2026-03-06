@@ -312,7 +312,7 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
           {Object.keys(filters).length > 0 ? 'Total cost (filtered range)' : 'Total cost (all time)'}
         </span>
         <span className="text-lg font-semibold text-gray-900 dark:text-white">
-          ${(totalCostCents / 100).toFixed(2)}
+          £{(totalCostCents / 100).toFixed(2)}
         </span>
       </div>
 
@@ -520,7 +520,7 @@ function CallRow({ call }: CallRowProps) {
       {/* Cost */}
       <td className="px-6 py-4 whitespace-nowrap">
         <div className="text-sm text-gray-700 dark:text-gray-300">
-          {call.call_cost_cents != null ? `$${(call.call_cost_cents / 100).toFixed(2)}` : '-'}
+          {call.customer_cost_cents != null ? `£${(call.customer_cost_cents / 100).toFixed(2)}` : '-'}
         </div>
       </td>
 

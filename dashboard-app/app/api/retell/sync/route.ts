@@ -63,23 +63,15 @@ export async function POST(): Promise<NextResponse> {
       }
     }
 
-    // Calculate Customer Cost based on Active Subscription
-    let customerCostCents = null;
+    // Calculate Customer Cost based on Active Subscription or Pay-As-You-Go
+    let customerCostCents: number | null = null;
     if (call.duration != null && activeSubscription && activeSubscription.rate_pence) {
-      // Retell duration is in milliseconds, convert to minutes (rounded up)
-      const minutes = Math.ceil(call.duration / 60000);
-      // Wait, is duration in ms or seconds? Retell API duration usually ms or secs based on types. 
-      // Let's check `lib/retell.ts` or similar, but generally we can use `Math.ceil(call.duration / 60000)` if ms,
-      // or `Math.ceil(call.duration / 60)` if seconds. Wait, the old code didn't do this. Let's assume duration is milliseconds if it's large.
-      // Wait, Retell `duration_ms` is in ms. If `duration` is in ms. Let's check typical Retell response: `duration_ms`.
-      // Actually `call.duration` is mapped from `duration_ms` usually. Let's look at how it maps.
-      // Let's assume duration is ms. So minutes = Math.ceil(call.duration / 60000);
-      const durationMs = call.duration;
-      // Some versions of retell API use duration_ms, some duration. Let's just use `call.duration` as ms.
-      const minutesUsed = Math.ceil(durationMs / 60000);
-
-      // Calculate cost
+      // call.duration is in SECONDS (retell.ts converts duration_ms → seconds)
+      const minutesUsed = Math.ceil(call.duration / 60);
       customerCostCents = minutesUsed * activeSubscription.rate_pence;
+    } else if (costCents != null) {
+      // Pay-as-you-go: no subscription → use Retell's own call cost
+      customerCostCents = costCents;
     }
 
     const cacheResult = await cacheCall({
