@@ -95,12 +95,7 @@ export default function LandingPage() {
                   src="/images/hero.png"
                   alt="AI Voice Assistant taking orders"
                   width={800} height={600}
-                  className="object-cover w-full h-full"
-                  onError={(e) => {
-                    // Fallback visually if image is missing
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                  }}
+                  className="object-cover w-full h-full relative z-10"
                 />
 
                 {/* Fallback container if image fails to load */}
