@@ -446,10 +446,10 @@ export async function getCallsByDateRange(
   }
 }
 
-export async function getRecentCalls(businessId?: string, count = 10): Promise<DbResult<Call[]>> {
+export async function getRecentCalls(userId?: string, count = 10): Promise<DbResult<Call[]>> {
   try {
-    const { rows } = businessId
-      ? await sql<Call>`SELECT * FROM calls WHERE business_id = ${businessId} ORDER BY call_date DESC LIMIT ${count}`
+    const { rows } = userId
+      ? await sql<Call>`SELECT * FROM calls WHERE user_id = ${userId} ORDER BY call_date DESC LIMIT ${count}`
       : await sql<Call>`SELECT * FROM calls ORDER BY call_date DESC LIMIT ${count}`;
     return { success: true, data: rows };
   } catch (error) {
@@ -527,7 +527,7 @@ export async function updateCallCost(callId: string, callCostCents: number, cust
 }
 
 export async function getCallMetrics(
-  businessId: string,
+  userId: string,
   startDate?: string,
   endDate?: string
 ): Promise<DbResult<{
@@ -549,7 +549,7 @@ export async function getCallMetrics(
         COALESCE(AVG(duration), 0)::float as avg_duration,
         COALESCE(SUM(customer_cost_cents), 0)::int as total_cost_cents
       FROM calls
-      WHERE (${businessId ?? null}::text IS NULL OR business_id = ${businessId ?? null})
+      WHERE (${userId ?? null}::text IS NULL OR user_id = ${userId ?? null})
         AND (${startDate ?? null}::text IS NULL OR call_date >= ${startDate ?? null})
         AND (${endDate ?? null}::text IS NULL OR call_date <= ${endDate ?? null})
     `;
@@ -573,9 +573,9 @@ export async function getCallMetrics(
   }
 }
 
-/** Sum of call_cost_cents for the business, optionally filtered by date/status/phone. */
+/** Sum of call_cost_cents for the user, optionally filtered by date/status/phone. */
 export async function getTotalCostCents(
-  businessId: string,
+  userId: string,
   filters?: { startDate?: string; endDate?: string; status?: string; phoneNumber?: string }
 ): Promise<DbResult<number>> {
   try {
@@ -585,7 +585,7 @@ export async function getTotalCostCents(
     const phoneNumber = filters?.phoneNumber ?? null;
     const { rows } = await sql<{ sum: number }>`
       SELECT COALESCE(SUM(customer_cost_cents), 0)::int as sum FROM calls
-      WHERE business_id = ${businessId}
+      WHERE user_id = ${userId}
         AND (${startDate}::text IS NULL OR call_date >= ${startDate})
         AND (${endDate}::text IS NULL OR call_date <= ${endDate})
         AND (${status}::text IS NULL OR status = ${status})

@@ -84,8 +84,8 @@ export async function POST(req: Request) {
                     price_data: {
                         currency: 'gbp',
                         product_data: {
-                            name: `${tierName} Dakika Paketi — ${minutes} DK`,
-                            description: `${minutes} dakika ön ödemeli kullanım hakkı (${rateP}p/dk). Dakikalar bitene kadar geçerlidir.`,
+                            name: `Sesli Asistan Paketi (${minutes} Dakika)`,
+                            description: `Bitene kadar geçerli ${minutes} dakika telefon görüşme kullanım hakkı.`,
                         },
                         unit_amount: totalPennies,
                     },

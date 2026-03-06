@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 /**
  * Pricing Slider Component
  * 
- * An interactive slider that calculates weekly pricing based on minute tiers.
+ * An interactive slider that calculates total pricing based on minute tiers.
  * Tiers:
  * - 200 - 400 mins: 20p/min
  * - 401 - 800 mins: 18p/min

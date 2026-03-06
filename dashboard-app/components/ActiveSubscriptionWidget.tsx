@@ -57,9 +57,6 @@ export default function ActiveSubscriptionWidget() {
     const remainingMinutes = Math.max(0, subscription.total_minutes - subscription.used_minutes);
     const percentUsed = Math.min(100, (subscription.used_minutes / subscription.total_minutes) * 100);
 
-    const endDate = new Date(subscription.end_date);
-    const daysLeft = Math.ceil((endDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24));
-
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -76,9 +73,9 @@ export default function ActiveSubscriptionWidget() {
                     </p>
                 </div>
                 <div className="text-right">
-                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Kalan Süre</div>
-                    <div className="text-xl font-extrabold text-blue-600 dark:text-blue-400">
-                        {daysLeft > 0 ? `${daysLeft} Gün` : 'Sona Erdi'}
+                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Durum</div>
+                    <div className="text-xl font-extrabold text-green-600 dark:text-green-400">
+                        {remainingMinutes > 0 ? 'Aktif' : 'Tükendi'}
                     </div>
                 </div>
             </div>

@@ -14,6 +14,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getCallMetrics, getRecentCalls, getBusinessesForUser, type Call } from '@/lib/db';
 import ActiveSubscriptionWidget from '@/components/ActiveSubscriptionWidget';
+import { sql } from '@vercel/postgres';
 
 /**
  * Dashboard metrics data
@@ -34,10 +35,15 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  // Fetch data globally for the user (or default business)
-  // Note: For now, we fetch without filtering by business_id to show all user data
-  const metricsResult = await getCallMetrics(''); // Pass empty string to fetch all or adjust as needed
-  const recentCallsResult = await getRecentCalls('', 10);
+  const isAdmin = session.user.email === 'mustafagl01@gmail.com';
+
+  if (isAdmin) {
+    return <AdminDashboardView />;
+  }
+
+  // Fetch data globally for the user
+  const metricsResult = await getCallMetrics(session.user.id);
+  const recentCallsResult = await getRecentCalls(session.user.id, 10);
 
   // Extract metrics with fallback values
   const metrics: DashboardMetrics = metricsResult.success && metricsResult.data
@@ -186,6 +192,170 @@ export default async function DashboardPage() {
               ))}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Admin Dashboard Subcomponent
+// ============================================================================
+
+async function AdminDashboardView() {
+  const { rows: users } = await sql<any>`
+      SELECT 
+          u.id as user_id, 
+          u.name, 
+          u.email,
+          s.plan_name,
+          s.total_minutes,
+          s.start_date
+      FROM users u
+      LEFT JOIN subscriptions s ON u.id = s.user_id AND s.status = 'active'
+      ORDER BY u.created_at DESC
+  `;
+
+  const summaries = await Promise.all(users.map(async (u) => {
+    let usedMinutes = 0;
+    if (u.start_date) {
+      const { rows } = await sql<{ sum: number }>`
+              SELECT COALESCE(SUM(duration), 0)::int as sum 
+              FROM calls 
+              WHERE user_id = ${u.user_id} 
+              AND call_date >= ${u.start_date}
+          `;
+      usedMinutes = Math.ceil((rows[0]?.sum || 0) / 60000);
+    } else {
+      // Fallback
+      const { rows } = await sql<{ sum: number }>`
+              SELECT COALESCE(SUM(duration), 0)::int as sum 
+              FROM calls 
+              WHERE user_id = ${u.user_id}
+          `;
+      usedMinutes = Math.ceil((rows[0]?.sum || 0) / 60000);
+    }
+
+    const remainingMinutes = u.total_minutes ? Math.max(0, u.total_minutes - usedMinutes) : 0;
+
+    return {
+      ...u,
+      usedMinutes,
+      remainingMinutes
+    };
+  }));
+
+  // Fetch some general metrics
+  const { rows: generalMetrics } = await sql<any>`
+      SELECT
+        COUNT(*)::int as total_calls,
+        COALESCE(SUM(duration), 0)::int as total_duration
+      FROM calls
+  `;
+  const totalCalls = generalMetrics[0]?.total_calls || 0;
+  const totalDurationMin = Math.ceil((generalMetrics[0]?.total_duration || 0) / 60000);
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Admin Dashboard
+          </h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Tüm müşterilerin genel durumu ve kalan dakikaları.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <MetricCard
+            title="Toplam Müşteri (İşletme)"
+            value={users.length.toString()}
+            subtitle="Sisteme kayıtlı kullanıcılar"
+            icon={
+              <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+              </svg>
+            }
+            color="blue"
+          />
+          <MetricCard
+            title="Toplam Çağrı Süresi"
+            value={`${totalDurationMin} dk`}
+            subtitle={`Toplam ${totalCalls} arama`}
+            icon={
+              <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+            }
+            color="green"
+          />
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-100 dark:border-gray-700">
+          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Müşteri Detayları</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-900/50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Müşteri</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Aktif Plan</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Dakika Kullanımı</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Durum</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {summaries.map((user) => (
+                  <tr key={user.user_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs uppercase">
+                          {user.name?.substring(0, 2) || 'UK'}
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {user.plan_name ? (
+                        <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                          {user.plan_name} ({user.total_minutes} dk)
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-500 dark:text-gray-400">Paket Yok</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-900 dark:text-white">{user.usedMinutes}</span>
+                        <span>/</span>
+                        <span>{user.total_minutes || 0} dk</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {user.plan_name ? (
+                        user.remainingMinutes > 0 ? (
+                          <span className="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">
+                            {user.remainingMinutes} dk kaldı
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
+                            Tükendi
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-500">-</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

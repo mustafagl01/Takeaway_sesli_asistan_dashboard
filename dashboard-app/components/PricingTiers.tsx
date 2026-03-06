@@ -9,7 +9,7 @@ interface TierData {
     rate: string;
     rateSuffix: string;
     rangeLabel: string;
-    weeklyRange: string;
+    totalRange: string;
     savings: string | null;
     features: string[];
     highlight: boolean;
@@ -26,7 +26,7 @@ const tiers: TierData[] = [
         rate: '20',
         rateSuffix: 'p / dakika',
         rangeLabel: 'Taahhütsüz',
-        weeklyRange: 'Kullandığın kadar öde',
+        totalRange: 'Kullandığın kadar öde',
         savings: null,
         features: [
             'Sözleşme yok',
@@ -44,7 +44,7 @@ const tiers: TierData[] = [
         rate: '18',
         rateSuffix: 'p / dakika',
         rangeLabel: '200 – 400 dk paket',
-        weeklyRange: '£36 – £72 toplam',
+        totalRange: '£36 – £72 toplam',
         savings: null,
         features: [
             'Küçük işletmeler için ideal',
@@ -62,7 +62,7 @@ const tiers: TierData[] = [
         rate: '16',
         rateSuffix: 'p / dakika',
         rangeLabel: '401 – 800 dk paket',
-        weeklyRange: '£64 – £128 toplam',
+        totalRange: '£64 – £128 toplam',
         savings: '%11 tasarruf',
         features: [
             'Orta ölçekli işletmeler',
@@ -81,7 +81,7 @@ const tiers: TierData[] = [
         rate: '14',
         rateSuffix: 'p / dakika',
         rangeLabel: '801 – 1500+ dk paket',
-        weeklyRange: '£112 – £210+ toplam',
+        totalRange: '£112 – £210+ toplam',
         savings: '%22 tasarruf',
         features: [
             'Yoğun işletmeler için',
@@ -164,7 +164,7 @@ export default function PricingTiers() {
                             {t.rangeLabel}
                         </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400 mb-5">
-                            {t.weeklyRange}
+                            {t.totalRange}
                         </div>
 
                         {/* Divider */}
@@ -190,7 +190,7 @@ export default function PricingTiers() {
                 <p className="text-sm text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
                     💡 <strong>Nasıl çalışır?</strong> Aşağıdaki kaydırıcı ile tam ihtiyacınız kadar dakika seçin. Seçtiğiniz
                     dakika miktarı hangi kademeye giriyorsa, o kademenin birim fiyatı <em>tüm dakikalara</em> uygulanır.
-                    Paketler haftalık ön ödemeli olarak çalışır.
+                    Aldığınız paket bitene kadar kullanılabilir, süre sınırı yoktur.
                 </p>
             </div>
         </div>
