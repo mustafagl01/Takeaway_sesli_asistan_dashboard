@@ -97,27 +97,30 @@ export default function Navbar({ className = '' }: NavbarProps) {
 
   if (status === 'loading') {
     return (
-      <nav className={`bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 ${className}`}>
+      <nav className={`glass-card border-b border-indigo-200/50 dark:border-indigo-700/50 ${className}`}>
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center">
-          <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 animate-pulse rounded" />
+          <div className="h-6 w-32 skeleton rounded-lg" />
         </div>
       </nav>
     )
   }
 
   return (
-    <nav className={`bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 ${className}`}>
+    <nav className={`glass-card border-b border-indigo-200/50 dark:border-indigo-700/50 sticky top-0 z-50 ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo/Brand */}
           <div className="flex items-center">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                </svg>
+            <Link href="/dashboard" className="flex items-center gap-3 group">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl blur-sm opacity-50 group-hover:opacity-75 transition-opacity" />
+                <div className="relative w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center text-white shadow-lg">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                </div>
               </div>
-              <span className="text-xl font-bold text-gray-900 dark:text-white hidden sm:block">Takeaway Dashboard</span>
+              <span className="text-xl font-bold gradient-text hidden sm:block">Takeaway Dashboard</span>
             </Link>
           </div>
 
@@ -129,9 +132,9 @@ export default function Navbar({ className = '' }: NavbarProps) {
                 href={link.href}
                 onMouseEnter={playHover}
                 onClick={playClick}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 hover-lift ${isActiveLink(link.href)
-                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 hover-lift ${isActiveLink(link.href)
+                  ? 'bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-700 dark:text-indigo-300 shadow-md shadow-indigo-500/20'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-indigo-500/10 dark:hover:bg-indigo-500/20 hover:text-indigo-700 dark:hover:text-indigo-300'
                   }`}
               >
                 {link.label}
@@ -141,21 +144,39 @@ export default function Navbar({ className = '' }: NavbarProps) {
 
           {/* User Menu */}
           <div className="hidden md:flex items-center space-x-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium overflow-hidden">
-                {session?.user?.image ? (
-                  <img src={session.user.image} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  getUserInitials()
-                )}
+            <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-indigo-500/10 dark:hover:bg-indigo-500/20 transition-colors cursor-pointer">
+              <div className="relative w-10 h-10">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full blur-sm opacity-40" />
+                <div className="relative w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-medium shadow-lg overflow-hidden">
+                  {session?.user?.image ? (
+                    <img src={session.user.image} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    getUserInitials()
+                  )}
+                </div>
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-medium text-gray-900 dark:text-white leading-none mb-1">{getDisplayName()}</span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-white leading-none mb-1">{getDisplayName()}</span>
                 <span className="text-xs text-gray-500 dark:text-gray-400 leading-none">{session?.user?.email}</span>
               </div>
             </div>
-            <button onClick={handleLogout} className="text-sm font-medium text-gray-500 hover:text-red-600 transition-colors">
-              {isLoggingOut ? '...' : 'Sign out'}
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 rounded-xl transition-all flex items-center gap-2"
+            >
+              {isLoggingOut ? (
+                <>
+                  <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-red-600 border-r-transparent" />
+                  Signing out...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Sign out
+                </>
+              )}
             </button>
           </div>
 
@@ -163,7 +184,7 @@ export default function Navbar({ className = '' }: NavbarProps) {
           <div className="md:hidden">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-md text-gray-700 dark:text-gray-300"
+              className="p-2 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-indigo-500/10 dark:hover:bg-indigo-500/20 transition-colors"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {isMobileMenuOpen ? (
@@ -179,18 +200,41 @@ export default function Navbar({ className = '' }: NavbarProps) {
 
       {/* Mobile menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="md:hidden border-t border-indigo-200/50 dark:border-indigo-700/50 bg-white/50 dark:bg-gray-800/50 backdrop-blur-md">
           <div className="px-2 pt-2 pb-3 space-y-1">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`block px-3 py-2 rounded-md text-base font-medium ${isActiveLink(link.href) ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
+                className={`block px-4 py-3 rounded-xl text-base font-medium transition-all ${isActiveLink(link.href)
+                  ? 'bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-700 dark:text-indigo-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-indigo-500/10 dark:hover:bg-indigo-500/20'
+                  }`}
               >
                 {link.label}
               </Link>
             ))}
+            <div className="border-t border-indigo-200/50 dark:border-indigo-700/50 pt-3 mt-3">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                  {getUserInitials()}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{getDisplayName()}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{session?.user?.email}</span>
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="w-full text-left px-4 py-3 text-base font-medium text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 rounded-xl transition-all flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                {isLoggingOut ? 'Signing out...' : 'Sign out'}
+              </button>
+            </div>
           </div>
         </div>
       )}

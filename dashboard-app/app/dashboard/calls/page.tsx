@@ -75,29 +75,57 @@ export default async function CallsListPage() {
   const initialTotalCostCents = costResult.success ? costResult.data : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page Header */}
-        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Phone Calls
-            </h1>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">
-              View and search your phone call history. Sync from Retell to pull your latest calls.
-            </p>
+    <>
+      {/* Aurora Background */}
+      <div className="aurora-bg">
+        <div className="aurora-layer aurora-layer-1" />
+        <div className="aurora-layer aurora-layer-2" />
+        <div className="aurora-layer aurora-layer-3" />
+        <div className="noise-overlay" />
+      </div>
+
+      <div className="relative min-h-screen">
+        {/* Hero Section */}
+        <div className="relative overflow-hidden">
+          <div className="absolute inset-0 grid-pattern opacity-50" />
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative">
+            <div className="animate-fade-in-up">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-cyan-500/10 to-blue-500/10 dark:from-cyan-500/20 dark:to-blue-500/20 border border-cyan-200/50 dark:border-cyan-700/50 mb-6">
+                <svg className="w-4 h-4 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                <span className="text-sm font-medium text-cyan-700 dark:text-cyan-300">
+                  Call History
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-4xl sm:text-5xl font-bold">
+                    <span className="gradient-text">Phone Calls</span>
+                  </h1>
+                  <p className="mt-3 text-lg text-gray-600 dark:text-gray-400 max-w-2xl">
+                    View and search your phone call history
+                  </p>
+                </div>
+                <div className="animate-fade-in" style={{ animationDelay: '200ms' }}>
+                  <SyncRetellButton />
+                </div>
+              </div>
+            </div>
           </div>
-          <SyncRetellButton />
         </div>
 
         {/* Call List Component */}
-        <CallList
-          initialCalls={initialCalls}
-          initialTotal={initialTotal}
-          initialTotalCostCents={initialTotalCostCents}
-          userId={session.user.id}
-        />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+          <CallList
+            initialCalls={initialCalls}
+            initialTotal={initialTotal}
+            initialTotalCostCents={initialTotalCostCents}
+            userId={session.user.id}
+          />
+        </div>
       </div>
-    </div>
+    </>
   );
 }

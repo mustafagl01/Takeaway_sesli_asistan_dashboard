@@ -206,8 +206,11 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
   return (
     <div className="space-y-6">
       {/* Filters Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="glass-card rounded-2xl p-6 animate-fade-in-up">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
           Filters
         </h3>
 
@@ -223,7 +226,7 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               disabled={isLoading}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all disabled:opacity-50"
             />
           </div>
 
@@ -238,7 +241,7 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               disabled={isLoading}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all disabled:opacity-50"
             />
           </div>
 
@@ -252,7 +255,7 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
               value={status}
               onChange={(e) => setStatus(e.target.value)}
               disabled={isLoading}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all disabled:opacity-50"
             >
               <option value="">All statuses</option>
               <option value="completed">Completed</option>
@@ -275,7 +278,7 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
               onChange={(e) => setPhoneNumber(e.target.value)}
               disabled={isLoading}
               placeholder="Search by phone"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all disabled:opacity-50"
             />
           </div>
         </div>
@@ -285,14 +288,14 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
           <button
             onClick={handleApplyFilters}
             disabled={isLoading}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 disabled:from-gray-400 disabled:to-gray-500 text-white font-medium rounded-xl transition-all shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 disabled:shadow-none disabled:cursor-not-allowed"
           >
             {isLoading ? 'Applying...' : 'Apply Filters'}
           </button>
           <button
             onClick={handleClearFilters}
             disabled={isLoading}
-            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 hover:from-gray-200 hover:to-gray-300 dark:hover:from-gray-700 dark:hover:to-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-xl transition-all border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Clear Filters
           </button>
@@ -301,101 +304,79 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
 
       {/* Error State */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
+        <div className="glass-card rounded-2xl p-4 border border-red-200/50 dark:border-red-700/50 bg-red-50/50 dark:bg-red-900/20 animate-fade-in">
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </div>
       )}
 
-      {/* Total cost (all or for current filters) */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md px-6 py-3 flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {Object.keys(filters).length > 0 ? 'Total cost (filtered range)' : 'Total cost (all time)'}
-        </span>
-        <span className="text-lg font-semibold text-gray-900 dark:text-white">
+      {/* Total cost card */}
+      <div className="glass-card rounded-2xl p-5 flex items-center justify-between animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
+            <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {Object.keys(filters).length > 0 ? 'Total cost (filtered)' : 'Total cost (all time)'}
+          </span>
+        </div>
+        <span className="metric-card-value text-2xl">
           £{(totalCostCents / 100).toFixed(2)}
         </span>
       </div>
 
       {/* Calls Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+      <div className="glass-card rounded-2xl overflow-hidden animate-fade-in-up" style={{ animationDelay: '200ms' }}>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-700">
+            <thead className="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200/50 dark:border-gray-700/50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Date & Time
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Phone Number
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Duration
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Cost
                 </th>
-                {/* Cost column header - updated */}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center justify-center">
-                      <svg
-                        className="animate-spin h-5 w-5 text-gray-400 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        />
-                      </svg>
-                      Loading calls...
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center">
+                      <div className="inline-block h-10 w-10 animate-spin rounded-full border-4 border-solid border-indigo-500 border-r-transparent"></div>
+                      <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading calls...</p>
                     </div>
                   </td>
                 </tr>
               ) : calls.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td colSpan={6} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center">
-                      <svg
-                        className="h-12 w-12 text-gray-400 mb-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                        />
-                      </svg>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        No calls found matching your filters
-                      </p>
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 mb-4">
+                        <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">No calls found matching your filters</p>
                     </div>
                   </td>
                 </tr>
               ) : (
-                calls.map((call) => <CallRow key={call.id} call={call} />)
+                calls.map((call, index) => <CallRow key={call.id} call={call} index={index} />)
               )}
             </tbody>
           </table>
@@ -403,12 +384,12 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
 
         {/* Pagination Controls */}
         {totalPages > 1 && (
-          <div className="bg-gray-50 dark:bg-gray-700 px-6 py-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-600">
+          <div className="bg-gray-50/50 dark:bg-gray-800/50 px-6 py-4 flex items-center justify-between border-t border-gray-200/50 dark:border-gray-700/50">
             {/* Pagination Info */}
             <div className="text-sm text-gray-700 dark:text-gray-300">
-              Showing <span className="font-medium">{startIndex}</span> to{' '}
-              <span className="font-medium">{endIndex}</span> of{' '}
-              <span className="font-medium">{pagination.total}</span> calls
+              Showing <span className="font-semibold text-gray-900 dark:text-white">{startIndex}</span> to{' '}
+              <span className="font-semibold text-gray-900 dark:text-white">{endIndex}</span> of{' '}
+              <span className="font-semibold text-gray-900 dark:text-white">{pagination.total}</span> calls
             </div>
 
             {/* Pagination Buttons */}
@@ -416,14 +397,14 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
               <button
                 onClick={() => handlePageChange(pagination.page - 1)}
                 disabled={pagination.page === 1 || isLoading}
-                className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 Previous
               </button>
               <button
                 onClick={() => handlePageChange(pagination.page + 1)}
                 disabled={pagination.page === totalPages || isLoading}
-                className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 Next
               </button>
@@ -444,6 +425,7 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
  */
 interface CallRowProps {
   call: Call
+  index: number
 }
 
 /**
@@ -454,7 +436,7 @@ interface CallRowProps {
  * @param props - Call row props
  * @returns Call row JSX
  */
-function CallRow({ call }: CallRowProps) {
+function CallRow({ call, index }: CallRowProps) {
   // Format call date
   const callDate = new Date(call.call_date)
   const formattedDate = callDate.toLocaleDateString('en-GB', {
@@ -467,16 +449,36 @@ function CallRow({ call }: CallRowProps) {
     minute: '2-digit',
   })
 
-  // Status badge color
-  const statusColors: Record<string, string> = {
-    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-    missed: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-    failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-    in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+  // Status badge config
+  const statusConfig: Record<string, { bg: string; text: string; dot: string }> = {
+    completed: {
+      bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+      text: 'text-emerald-700 dark:text-emerald-400',
+      dot: 'bg-emerald-500',
+    },
+    missed: {
+      bg: 'bg-amber-500/10 dark:bg-amber-500/20',
+      text: 'text-amber-700 dark:text-amber-400',
+      dot: 'bg-amber-500',
+    },
+    failed: {
+      bg: 'bg-red-500/10 dark:bg-red-500/20',
+      text: 'text-red-700 dark:text-red-400',
+      dot: 'bg-red-500',
+    },
+    in_progress: {
+      bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
+      text: 'text-indigo-700 dark:text-indigo-400',
+      dot: 'bg-indigo-500',
+    },
+    cancelled: {
+      bg: 'bg-gray-500/10 dark:bg-gray-500/20',
+      text: 'text-gray-700 dark:text-gray-400',
+      dot: 'bg-gray-500',
+    },
   }
 
-  const statusBadgeClass = statusColors[call.status] || statusColors.cancelled
+  const config = statusConfig[call.status] || statusConfig.cancelled
 
   // Format duration
   const formatDuration = (seconds: number | null): string => {
@@ -487,16 +489,16 @@ function CallRow({ call }: CallRowProps) {
   }
 
   return (
-    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+    <tr className="hover:bg-indigo-500/5 dark:hover:bg-indigo-500/10 transition-colors opacity-0 animate-fade-in" style={{ animationDelay: `${300 + index * 30}ms` }}>
       {/* Date & Time */}
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900 dark:text-white">{formattedDate}</div>
+        <div className="text-sm font-medium text-gray-900 dark:text-white">{formattedDate}</div>
         <div className="text-xs text-gray-500 dark:text-gray-400">{formattedTime}</div>
       </td>
 
       {/* Phone Number */}
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900 dark:text-white font-medium">
+        <div className="text-sm font-semibold text-gray-900 dark:text-white">
           {call.phone_number}
         </div>
       </td>
@@ -510,16 +512,15 @@ function CallRow({ call }: CallRowProps) {
 
       {/* Status */}
       <td className="px-6 py-4 whitespace-nowrap">
-        <span
-          className={`px-3 py-1 text-xs font-medium rounded-full ${statusBadgeClass}`}
-        >
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full ${config.bg} ${config.text} border border-current/20`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${config.dot} animate-pulse`} />
           {call.status.replace('_', ' ')}
         </span>
       </td>
 
       {/* Cost */}
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-700 dark:text-gray-300">
+        <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
           {call.customer_cost_cents != null ? `£${(call.customer_cost_cents / 100).toFixed(2)}` : '-'}
         </div>
       </td>
@@ -528,9 +529,12 @@ function CallRow({ call }: CallRowProps) {
       <td className="px-6 py-4 whitespace-nowrap text-sm">
         <Link
           href={`/dashboard/calls/${call.id}`}
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+          className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium transition-colors"
         >
           View Details
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
         </Link>
       </td>
     </tr>
