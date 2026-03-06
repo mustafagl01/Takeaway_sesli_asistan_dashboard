@@ -4,10 +4,16 @@ import Stripe from 'stripe';
 
 export const dynamic = 'force-dynamic';
 
-// Initialize Stripe with the secret key from environment variables
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-    apiVersion: '2025-02-24-preview' as any, // Standard latest or fallback
-});
+// Lazy Stripe initialization – avoids build-time crash when env vars are absent
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+    if (!_stripe) {
+        const key = process.env.STRIPE_SECRET_KEY;
+        if (!key) throw new Error('STRIPE_SECRET_KEY is not set');
+        _stripe = new Stripe(key, { apiVersion: '2025-02-24-preview' as any });
+    }
+    return _stripe;
+}
 
 /**
  * Calculates the weekly price based on input minutes and tiers.
@@ -65,7 +71,7 @@ export async function POST(req: Request) {
         const totalPounds = (totalPennies / 100).toFixed(2);
 
         // 5. Create Stripe Checkout Session
-        const checkoutSession = await stripe.checkout.sessions.create({
+        const checkoutSession = await getStripe().checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [
                 {
