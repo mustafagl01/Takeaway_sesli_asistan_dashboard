@@ -52,7 +52,15 @@ export default function PricingSlider() {
             });
 
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Ödeme oturumu başlatılamadı.');
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    // Kullanıcı giriş yapmamışsa login sayfasına yönlendir, ardından ödeme sayfasına dönsün
+                    window.location.href = '/login?callbackUrl=/dashboard/billing';
+                    return;
+                }
+                throw new Error(data.error || 'Ödeme oturumu başlatılamadı.');
+            }
 
             if (data.url) {
                 window.location.href = data.url;
