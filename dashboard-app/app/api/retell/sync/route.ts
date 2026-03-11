@@ -67,9 +67,10 @@ export async function POST(): Promise<NextResponse> {
     let customerCostCents: number | null = null;
     if (call.duration != null) {
       // call.duration is in SECONDS (retell.ts converts duration_ms → seconds)
-      const minutesUsed = Math.ceil(call.duration / 60);
+      // Seconds-precision billing: charge exact seconds used, not rounded up
+      const minutesUsed = parseFloat((call.duration / 60).toFixed(3));
       const ratePence = (activeSubscription && activeSubscription.rate_pence) ? activeSubscription.rate_pence : 20; // Default Pay As You Go rate is 20p/min
-      customerCostCents = minutesUsed * ratePence;
+      customerCostCents = Math.round(minutesUsed * ratePence);
     }
 
     const cacheResult = await cacheCall({

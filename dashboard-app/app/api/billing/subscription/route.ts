@@ -28,8 +28,8 @@ export async function GET() {
       AND call_date >= ${subscription.start_date}
     `;
 
-        // duration is in milliseconds, convert to minutes
-        const usedMinutes = Math.ceil((rows[0]?.sum || 0) / 60000);
+        // duration is in milliseconds, convert to minutes (seconds-precision, no rounding up)
+        const usedMinutes = parseFloat(((rows[0]?.sum || 0) / 60000).toFixed(2));
 
         return NextResponse.json({
             success: true,

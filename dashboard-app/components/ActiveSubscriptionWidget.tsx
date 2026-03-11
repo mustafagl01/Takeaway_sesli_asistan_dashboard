@@ -75,14 +75,14 @@ export default function ActiveSubscriptionWidget() {
                 <div className="text-right">
                     <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Durum</div>
                     <div className="text-xl font-extrabold text-green-600 dark:text-green-400">
-                        {remainingMinutes > 0 ? 'Aktif' : 'Tükendi'}
+                        {subscription.status === 'pay_as_you_go' ? '⚡ PAYG' : remainingMinutes > 0 ? 'Aktif' : 'Tükendi'}
                     </div>
                 </div>
             </div>
 
             <div className="mb-2 flex justify-between text-sm font-medium">
-                <span className="text-gray-700 dark:text-gray-300">Kullanılan: <span className="font-bold">{subscription.used_minutes} dk</span></span>
-                <span className="text-gray-700 dark:text-gray-300">Kalan: <span className="font-bold text-blue-600 dark:text-blue-400">{remainingMinutes} dk</span></span>
+                <span className="text-gray-700 dark:text-gray-300">Kullanılan: <span className="font-bold">{subscription.used_minutes.toFixed(2)} dk</span></span>
+                <span className="text-gray-700 dark:text-gray-300">Kalan: <span className="font-bold text-blue-600 dark:text-blue-400">{remainingMinutes.toFixed(2)} dk</span></span>
             </div>
 
             <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
