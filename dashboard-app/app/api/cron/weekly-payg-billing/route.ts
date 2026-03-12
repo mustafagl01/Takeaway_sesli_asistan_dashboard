@@ -1,24 +1,15 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
 
 export const runtime = 'nodejs';
 
 /**
  * GET /api/cron/weekly-payg-billing
- * 
- * Runs every Sunday — generates Stripe invoices for PAYG customers.
- * Call this via Vercel Cron or an external cron service.
- * 
- * vercel.json config:
- * {
- *   "crons": [{
- *     "path": "/api/cron/weekly-payg-billing",
- *     "schedule": "0 0 * * 0"
- *   }]
- * }
+ *
+ * Runs every Sunday and records weekly PAYG invoices.
+ * The actual Stripe invoice creation is still a TODO.
  */
 export async function GET(req: Request) {
-  // Verify cron secret (prevents unauthorized access)
   const authHeader = req.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
@@ -32,9 +23,8 @@ export async function GET(req: Request) {
     const weekAgoISO = weekAgo.toISOString();
     const nowISO = now.toISOString();
 
-    // Find all users on PAYG
     const { rows: paygUsers } = await sql`
-      SELECT s.*, u.email, u.name 
+      SELECT s.*, u.email, u.name
       FROM subscriptions s
       JOIN users u ON s.user_id = u.id
       WHERE s.status = 'pay_as_you_go'
@@ -43,15 +33,14 @@ export async function GET(req: Request) {
     const results = [];
 
     for (const sub of paygUsers) {
-      // Calculate PAYG usage for the past week
       const { rows: usageRows } = await sql<{ total_ms: number; call_count: number }>`
-        SELECT 
+        SELECT
           COALESCE(SUM(duration), 0)::bigint as total_ms,
           COUNT(*)::int as call_count
-        FROM calls 
+        FROM calls
         WHERE user_id = ${sub.user_id}
-        AND call_date >= ${weekAgoISO}
-        AND call_date <= ${nowISO}
+          AND call_date >= ${weekAgoISO}
+          AND call_date <= ${nowISO}
       `;
 
       const totalMs = usageRows[0]?.total_ms || 0;
@@ -62,13 +51,11 @@ export async function GET(req: Request) {
         continue;
       }
 
-      // Seconds-precision billing
       const totalMinutes = parseFloat((totalMs / 60000).toFixed(3));
-      const ratePence = sub.rate_pence || 20;
+      const ratePence = sub.payg_rate_pence || sub.rate_pence || 20;
       const totalPence = Math.round(totalMinutes * ratePence);
       const totalPounds = (totalPence / 100).toFixed(2);
 
-      // Log billing event
       await sql`
         INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
         VALUES (
@@ -76,20 +63,10 @@ export async function GET(req: Request) {
           ${sub.user_id},
           'payg_weekly_invoice',
           ${totalPence},
-          ${`Haftalık PAYG faturası: ${totalMinutes.toFixed(2)} dk × ${ratePence}p = £${totalPounds} (${callCount} arama)`},
+          ${`Haftalik PAYG faturasi: ${totalMinutes.toFixed(2)} dk x ${ratePence}p = GBP ${totalPounds} (${callCount} arama)`},
           ${nowISO}
         )
       `;
-
-      // TODO: Create actual Stripe invoice here
-      // const stripe = getStripe();
-      // const invoice = await stripe.invoices.create({
-      //   customer: stripeCustomerId,
-      //   auto_advance: true,
-      //   collection_method: 'send_invoice',
-      //   days_until_due: 7,
-      //   description: `Weekly PAYG - ${totalMinutes.toFixed(2)} minutes @ ${ratePence}p/min`,
-      // });
 
       results.push({
         user: sub.email,
@@ -99,7 +76,7 @@ export async function GET(req: Request) {
         calls: callCount,
       });
 
-      console.log(`📧 PAYG weekly invoice for ${sub.email}: £${totalPounds} (${totalMinutes.toFixed(2)} dk, ${callCount} arama)`);
+      console.log(`PAYG weekly invoice for ${sub.email}: GBP ${totalPounds} (${totalMinutes.toFixed(2)} dk, ${callCount} arama)`);
     }
 
     return NextResponse.json({

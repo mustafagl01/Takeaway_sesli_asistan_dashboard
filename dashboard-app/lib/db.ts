@@ -1,8 +1,9 @@
-/**
+﻿/**
  * Vercel Postgres (Neon) Database Access Layer
  * UK Takeaway Phone Order Assistant Dashboard
  */
 
+import { randomBytes } from 'crypto';
 import { sql } from '@vercel/postgres';
 
 // ============================================================================
@@ -19,6 +20,12 @@ export interface User {
   apple_id: string | null;
   /** Per-user Retell API key for syncing that user's calls. Stored in DB, not env. */
   retell_api_key: string | null;
+  /** Workspace-level webhook signing key used to verify incoming Retell webhooks. */
+  retell_webhook_key: string | null;
+  /** Stable per-user webhook token so each customer can use a dedicated Retell webhook URL. */
+  retell_webhook_token: string | null;
+  /** Optional fallback agent identifier for legacy webhook routing. */
+  retell_agent_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -71,6 +78,8 @@ export interface Subscription {
   plan_name: string;
   total_minutes: number;
   rate_pence: number;
+  payg_rate_pence?: number | null;
+  alert_sent_at?: string | null;
   start_date: string;
   end_date: string;
   status: string;
@@ -147,8 +156,23 @@ export async function createUser(userData: {
 }): Promise<DbResult<User>> {
   try {
     const now = new Date().toISOString();
+    const webhookToken = randomBytes(18).toString('hex');
     const { rows } = await sql<User>`
-      INSERT INTO users (id, email, password_hash, name, image, google_id, apple_id, created_at, updated_at)
+      INSERT INTO users (
+        id,
+        email,
+        password_hash,
+        name,
+        image,
+        google_id,
+        apple_id,
+        retell_api_key,
+        retell_webhook_key,
+        retell_webhook_token,
+        retell_agent_id,
+        created_at,
+        updated_at
+      )
       VALUES (
         ${userData.id},
         ${userData.email},
@@ -157,6 +181,10 @@ export async function createUser(userData: {
         ${userData.image || null},
         ${userData.google_id || null},
         ${userData.apple_id || null},
+        ${null},
+        ${null},
+        ${webhookToken},
+        ${null},
         ${now},
         ${now}
       )
@@ -170,19 +198,31 @@ export async function createUser(userData: {
 
 export async function updateUser(
   id: string,
-  updates: Partial<Pick<User, 'name' | 'image' | 'password_hash' | 'google_id' | 'apple_id' | 'retell_api_key'>>
+  updates: Partial<Pick<User, 'name' | 'image' | 'password_hash' | 'google_id' | 'apple_id' | 'retell_api_key' | 'retell_webhook_key' | 'retell_webhook_token' | 'retell_agent_id'>>
 ): Promise<DbResult<User>> {
   try {
     const now = new Date().toISOString();
-    const retellKeyValue = updates.retell_api_key !== undefined ? (updates.retell_api_key ?? null) : null;
+    const hasName = Object.prototype.hasOwnProperty.call(updates, 'name');
+    const hasImage = Object.prototype.hasOwnProperty.call(updates, 'image');
+    const hasPasswordHash = Object.prototype.hasOwnProperty.call(updates, 'password_hash');
+    const hasGoogleId = Object.prototype.hasOwnProperty.call(updates, 'google_id');
+    const hasAppleId = Object.prototype.hasOwnProperty.call(updates, 'apple_id');
+    const hasRetellApiKey = Object.prototype.hasOwnProperty.call(updates, 'retell_api_key');
+    const hasRetellWebhookKey = Object.prototype.hasOwnProperty.call(updates, 'retell_webhook_key');
+    const hasRetellWebhookToken = Object.prototype.hasOwnProperty.call(updates, 'retell_webhook_token');
+    const hasRetellAgentId = Object.prototype.hasOwnProperty.call(updates, 'retell_agent_id');
+
     const { rows } = await sql<User>`
       UPDATE users SET
-        name = COALESCE(${updates.name ?? null}, name),
-        image = COALESCE(${updates.image ?? null}, image),
-        password_hash = COALESCE(${updates.password_hash ?? null}, password_hash),
-        google_id = COALESCE(${updates.google_id ?? null}, google_id),
-        apple_id = COALESCE(${updates.apple_id ?? null}, apple_id),
-        retell_api_key = COALESCE(${retellKeyValue}, (SELECT u.retell_api_key FROM users u WHERE u.id = ${id})),
+        name = CASE WHEN ${hasName} THEN ${updates.name ?? null} ELSE name END,
+        image = CASE WHEN ${hasImage} THEN ${updates.image ?? null} ELSE image END,
+        password_hash = CASE WHEN ${hasPasswordHash} THEN ${updates.password_hash ?? null} ELSE password_hash END,
+        google_id = CASE WHEN ${hasGoogleId} THEN ${updates.google_id ?? null} ELSE google_id END,
+        apple_id = CASE WHEN ${hasAppleId} THEN ${updates.apple_id ?? null} ELSE apple_id END,
+        retell_api_key = CASE WHEN ${hasRetellApiKey} THEN ${updates.retell_api_key ?? null} ELSE retell_api_key END,
+        retell_webhook_key = CASE WHEN ${hasRetellWebhookKey} THEN ${updates.retell_webhook_key ?? null} ELSE retell_webhook_key END,
+        retell_webhook_token = CASE WHEN ${hasRetellWebhookToken} THEN ${updates.retell_webhook_token ?? null} ELSE retell_webhook_token END,
+        retell_agent_id = CASE WHEN ${hasRetellAgentId} THEN ${updates.retell_agent_id ?? null} ELSE retell_agent_id END,
         updated_at = ${now}
       WHERE id = ${id}
       RETURNING *
@@ -603,14 +643,12 @@ export async function getTotalCostCents(
 
 export async function getActiveSubscription(userId: string): Promise<Subscription | null> {
   try {
-    const now = new Date().toISOString();
     const { rows } = await sql<Subscription>`
-      SELECT * FROM subscriptions 
-      WHERE user_id = ${userId} AND status = 'active'
+      SELECT * FROM subscriptions
+      WHERE user_id = ${userId} AND status IN ('active', 'pay_as_you_go')
       ORDER BY created_at DESC LIMIT 1
     `;
-    // We can allow active subscriptions past their end date conceptually if they want, 
-    // or filter by `end_date > now`. Let's just return the latest active one.
+    // Return the latest active or PAYG subscription for the user.
     return rows[0] || null;
   } catch (error) {
     console.error('getActiveSubscription error:', error);
@@ -624,19 +662,45 @@ export async function createSubscription(data: {
   plan_name: string;
   total_minutes: number;
   rate_pence: number;
+  payg_rate_pence?: number | null;
   start_date: string;
   end_date: string;
 }): Promise<DbResult<Subscription>> {
   try {
     const now = new Date().toISOString();
-    // Invalidate previous active subscriptions for the user
-    await sql`UPDATE subscriptions SET status = 'expired' WHERE user_id = ${data.user_id} AND status = 'active'`;
+    const paygRatePence = data.payg_rate_pence ?? Math.max(20, Math.round(data.rate_pence * 1.3));
+
+    // Invalidate previous active or PAYG subscriptions for the user
+    await sql`
+      UPDATE subscriptions
+      SET status = 'expired'
+      WHERE user_id = ${data.user_id} AND status IN ('active', 'pay_as_you_go')
+    `;
 
     const { rows } = await sql<Subscription>`
-      INSERT INTO subscriptions (id, user_id, plan_name, total_minutes, rate_pence, start_date, end_date, status, created_at)
+      INSERT INTO subscriptions (
+        id,
+        user_id,
+        plan_name,
+        total_minutes,
+        rate_pence,
+        payg_rate_pence,
+        start_date,
+        end_date,
+        status,
+        created_at
+      )
       VALUES (
-        ${data.id}, ${data.user_id}, ${data.plan_name}, ${data.total_minutes}, 
-        ${data.rate_pence}, ${data.start_date}, ${data.end_date}, 'active', ${now}
+        ${data.id},
+        ${data.user_id},
+        ${data.plan_name},
+        ${data.total_minutes},
+        ${data.rate_pence},
+        ${paygRatePence},
+        ${data.start_date},
+        ${data.end_date},
+        'active',
+        ${now}
       )
       RETURNING *
     `;
@@ -645,7 +709,6 @@ export async function createSubscription(data: {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
-
 
 export async function deleteCall(callId: string): Promise<DbResult<void>> {
   try {
@@ -711,3 +774,12 @@ export async function healthCheck(): Promise<boolean> {
     return false;
   }
 }
+
+
+
+
+
+
+
+
+

@@ -1,46 +1,24 @@
-/**
- * Profile Page
- * UK Takeaway Phone Order Assistant Dashboard
- *
- * Allows users to view and manage their account information.
- * Protected route requiring authentication.
- *
- * @see https://nextjs.org/docs/app/building-your-application/rendering/server-components
- * @see /lib/db.ts - Database query functions
- * @see /lib/auth.ts - Password hashing utilities
- */
-
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-/**
- * Profile form state
- */
 interface ProfileFormData {
   name: string;
   email: string;
   retellApiKey: string;
+  retellWebhookKey: string;
+  retellAgentId: string;
+  webhookUrl: string;
 }
 
-/**
- * Password change form state
- */
 interface PasswordFormData {
   currentPassword: string;
   newPassword: string;
   confirmPassword: string;
 }
 
-/**
- * OAuth provider info
- */
 interface OAuthProvider {
   id: string;
   name: string;
@@ -48,38 +26,23 @@ interface OAuthProvider {
   icon: React.ReactNode;
 }
 
-// ============================================================================
-// Main Component - Profile Page
-// ============================================================================
-
-/**
- * Profile Page Component
- *
- * Client component that displays and manages user profile information.
- * Requires authenticated session via NextAuth.js.
- *
- * Features:
- * - Display user information (name, email, profile picture)
- * - Change password form
- * - Linked OAuth providers display (Google)
- * - Update profile information
- * - Dark mode support
- *
- * @returns Profile page JSX
- */
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  // Form states
   const [profileForm, setProfileForm] = useState<ProfileFormData>({
     name: session?.user?.name || '',
     email: session?.user?.email || '',
     retellApiKey: '',
+    retellWebhookKey: '',
+    retellAgentId: '',
+    webhookUrl: '',
   });
   const [hasRetellKey, setHasRetellKey] = useState(false);
+  const [hasRetellWebhookKey, setHasRetellWebhookKey] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [retellKeyTouched, setRetellKeyTouched] = useState(false);
+  const [retellWebhookKeyTouched, setRetellWebhookKeyTouched] = useState(false);
 
   const [passwordForm, setPasswordForm] = useState<PasswordFormData>({
     currentPassword: '',
@@ -87,34 +50,38 @@ export default function ProfilePage() {
     confirmPassword: '',
   });
 
-  // UI states
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Load profile (name, hasRetellKey) once
   useEffect(() => {
     if (status !== 'authenticated' || profileLoaded) return;
+
     fetch('/api/user/profile')
       .then((r) => r.json())
       .then((data) => {
         if (data.success && data.data) {
-          setProfileForm((prev) => ({ ...prev, name: data.data.name, email: data.data.email }));
+          setProfileForm((prev) => ({
+            ...prev,
+            name: data.data.name,
+            email: data.data.email,
+            retellAgentId: data.data.retellAgentId || '',
+            webhookUrl: data.data.webhookUrl || '',
+          }));
           setHasRetellKey(!!data.data.hasRetellKey);
+          setHasRetellWebhookKey(!!data.data.hasRetellWebhookKey);
         }
         setProfileLoaded(true);
       })
       .catch(() => setProfileLoaded(true));
   }, [status, profileLoaded]);
 
-  // Redirect if not authenticated
   if (status === 'unauthenticated') {
     router.push('/login');
     return null;
   }
 
-  // Show loading state
   if (status === 'loading') {
     return (
       <>
@@ -131,7 +98,6 @@ export default function ProfilePage() {
     );
   }
 
-  // Determine OAuth provider linkage
   const userImage = session?.user?.image;
   const hasGoogleAuth = userImage?.includes('google') || userImage?.includes('lh3.googleusercontent.com');
 
@@ -151,19 +117,30 @@ export default function ProfilePage() {
     },
   ];
 
-  /**
-   * Handle profile update form submission
-   */
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUpdatingProfile(true);
     setProfileMessage(null);
 
     try {
-      const body: { name: string; retell_api_key?: string | null } = { name: profileForm.name };
+      const body: {
+        name: string;
+        retell_agent_id: string | null;
+        retell_api_key?: string | null;
+        retell_webhook_key?: string | null;
+      } = {
+        name: profileForm.name,
+        retell_agent_id: profileForm.retellAgentId.replace(/\r\n|\r|\n/g, '').trim() || null,
+      };
+
       if (retellKeyTouched) {
         const key = profileForm.retellApiKey.replace(/\r\n|\r|\n/g, '').trim();
         body.retell_api_key = key || null;
+      }
+
+      if (retellWebhookKeyTouched) {
+        const key = profileForm.retellWebhookKey.replace(/\r\n|\r|\n/g, '').trim();
+        body.retell_webhook_key = key || null;
       }
 
       const response = await fetch('/api/user/profile', {
@@ -173,7 +150,7 @@ export default function ProfilePage() {
       });
 
       const text = await response.text();
-      let data: { success?: boolean; error?: string } = {};
+      let data: { success?: boolean; error?: string; data?: any } = {};
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
@@ -188,28 +165,34 @@ export default function ProfilePage() {
         setProfileMessage({ type: 'success', text: 'Profile updated successfully' });
         if (retellKeyTouched) {
           setHasRetellKey(!!body.retell_api_key);
-          setProfileForm((prev) => ({ ...prev, retellApiKey: '' }));
-          setRetellKeyTouched(false);
         }
+        if (retellWebhookKeyTouched) {
+          setHasRetellWebhookKey(!!body.retell_webhook_key);
+        }
+        setProfileForm((prev) => ({
+          ...prev,
+          retellApiKey: '',
+          retellWebhookKey: '',
+          retellAgentId: data.data?.retellAgentId ?? body.retell_agent_id ?? '',
+          webhookUrl: data.data?.webhookUrl ?? prev.webhookUrl,
+        }));
+        setRetellKeyTouched(false);
+        setRetellWebhookKeyTouched(false);
       } else {
         setProfileMessage({ type: 'error', text: data.error || 'Failed to update profile' });
       }
-    } catch (error) {
+    } catch {
       setProfileMessage({ type: 'error', text: 'An error occurred while updating profile' });
     } finally {
       setIsUpdatingProfile(false);
     }
   };
 
-  /**
-   * Handle password change form submission
-   */
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsChangingPassword(true);
     setPasswordMessage(null);
 
-    // Client-side validation
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setPasswordMessage({ type: 'error', text: 'New passwords do not match' });
       setIsChangingPassword(false);
@@ -240,7 +223,7 @@ export default function ProfilePage() {
       } else {
         setPasswordMessage({ type: 'error', text: data.error || 'Failed to change password' });
       }
-    } catch (error) {
+    } catch {
       setPasswordMessage({ type: 'error', text: 'An error occurred while changing password' });
     } finally {
       setIsChangingPassword(false);
@@ -249,7 +232,6 @@ export default function ProfilePage() {
 
   return (
     <>
-      {/* Aurora Background */}
       <div className="aurora-bg">
         <div className="aurora-layer aurora-layer-1" />
         <div className="aurora-layer aurora-layer-2" />
@@ -258,7 +240,6 @@ export default function ProfilePage() {
       </div>
 
       <div className="relative min-h-screen">
-        {/* Hero Section */}
         <div className="relative overflow-hidden">
           <div className="absolute inset-0 grid-pattern opacity-50" />
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative">
@@ -267,23 +248,20 @@ export default function ProfilePage() {
                 <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-                <span className="text-sm font-medium text-violet-700 dark:text-violet-300">
-                  Account Settings
-                </span>
+                <span className="text-sm font-medium text-violet-700 dark:text-violet-300">Account Settings</span>
               </div>
 
               <h1 className="text-4xl sm:text-5xl font-bold">
                 <span className="gradient-text">Profile</span>
               </h1>
               <p className="mt-3 text-lg text-gray-600 dark:text-gray-400">
-                Manage your account settings and preferences
+                Manage your account settings and Retell workspace connection.
               </p>
             </div>
           </div>
         </div>
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
-          {/* Profile Information Section */}
           <div className="glass-card rounded-2xl p-8 mb-6 animate-fade-in-up">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
               <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,7 +270,6 @@ export default function ProfilePage() {
               Profile Information
             </h2>
 
-            {/* User Avatar and Info */}
             <div className="flex items-center gap-6 mb-8">
               <div className="flex-shrink-0">
                 {session?.user?.image ? (
@@ -310,14 +287,11 @@ export default function ProfilePage() {
                 )}
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {session?.user?.name || 'User'}
-                </h3>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{session?.user?.name || 'User'}</h3>
                 <p className="text-gray-600 dark:text-gray-400">{session?.user?.email}</p>
               </div>
             </div>
 
-            {/* Profile Update Form */}
             <form onSubmit={handleProfileUpdate}>
               <div className="mb-5">
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -348,6 +322,77 @@ export default function ProfilePage() {
                 <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Email cannot be changed</p>
               </div>
 
+              <div className="mb-6 rounded-2xl border border-indigo-200/60 dark:border-indigo-700/60 bg-indigo-50/60 dark:bg-indigo-950/30 p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white">Retell Workspace Connection</h3>
+                </div>
+                <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
+                  <p>1. Save your workspace webhook key and optional agent ID here.</p>
+                  <p>2. Copy the Post-call Webhook URL below into the matching Retell workspace.</p>
+                  <p>3. Keep the API key only for call sync and detail fetches.</p>
+                </div>
+              </div>
+
+              <div className="mb-5">
+                <label htmlFor="webhookUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Post-call Webhook URL
+                </label>
+                <input
+                  type="text"
+                  id="webhookUrl"
+                  value={profileForm.webhookUrl}
+                  readOnly
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+                />
+                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  Use this exact URL in the corresponding Retell workspace. Each customer should keep their own unique URL.
+                </p>
+              </div>
+
+              <div className="mb-5">
+                <label htmlFor="retellAgentId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Retell Agent ID
+                </label>
+                <input
+                  type="text"
+                  id="retellAgentId"
+                  value={profileForm.retellAgentId}
+                  onChange={(e) => setProfileForm((prev) => ({ ...prev, retellAgentId: e.target.value }))}
+                  placeholder="Optional but recommended for fallback matching"
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all"
+                  autoComplete="off"
+                />
+                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  If a workspace has a single main agent, save it here so the legacy webhook route can still resolve calls.
+                </p>
+              </div>
+
+              <div className="mb-5">
+                <label htmlFor="retellWebhookKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Retell Webhook Key
+                </label>
+                <input
+                  type="password"
+                  id="retellWebhookKey"
+                  value={profileForm.retellWebhookKey}
+                  onChange={(e) => {
+                    setProfileForm((prev) => ({ ...prev, retellWebhookKey: e.target.value }));
+                    setRetellWebhookKeyTouched(true);
+                  }}
+                  placeholder={hasRetellWebhookKey ? 'Saved. Enter a new key to replace it' : 'Paste the webhook signing key from this Retell workspace'}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all"
+                  autoComplete="off"
+                />
+                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {hasRetellWebhookKey
+                    ? 'Webhook key saved. Enter a new value only if you want to rotate it.'
+                    : 'Required so the dashboard can verify Retell webhook signatures securely.'}
+                </p>
+              </div>
+
               <div className="mb-5">
                 <label htmlFor="retellApiKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Retell API Key
@@ -360,21 +405,25 @@ export default function ProfilePage() {
                     setProfileForm((prev) => ({ ...prev, retellApiKey: e.target.value }));
                     setRetellKeyTouched(true);
                   }}
-                  placeholder={hasRetellKey ? '•••••••• (enter new key to change)' : 'Paste your Retell API key to sync calls'}
+                  placeholder={hasRetellKey ? 'Saved. Enter a new key to replace it' : 'Paste your Retell API key to sync calls'}
                   className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all"
                   autoComplete="off"
                 />
                 <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  {hasRetellKey ? 'Key saved. Enter a new value to replace, or leave blank when updating to keep it.' : 'Required to sync calls from Retell on the Phone Calls page. Get it from your Retell dashboard.'}
+                  {hasRetellKey
+                    ? 'API key saved. Enter a new value only if you want to replace it.'
+                    : 'Used for manual sync and call detail fetches on the dashboard.'}
                 </p>
               </div>
 
               {profileMessage && (
-                <div className={`mb-5 p-4 rounded-xl border ${
-                  profileMessage.type === 'success'
-                    ? 'bg-emerald-50/50 dark:bg-emerald-900/20 border-emerald-200/50 dark:border-emerald-700/50 text-emerald-800 dark:text-emerald-400'
-                    : 'bg-red-50/50 dark:bg-red-900/20 border-red-200/50 dark:border-red-700/50 text-red-800 dark:text-red-400'
-                }`}>
+                <div
+                  className={`mb-5 p-4 rounded-xl border ${
+                    profileMessage.type === 'success'
+                      ? 'bg-emerald-50/50 dark:bg-emerald-900/20 border-emerald-200/50 dark:border-emerald-700/50 text-emerald-800 dark:text-emerald-400'
+                      : 'bg-red-50/50 dark:bg-red-900/20 border-red-200/50 dark:border-red-700/50 text-red-800 dark:text-red-400'
+                  }`}
+                >
                   {profileMessage.text}
                 </div>
               )}
@@ -391,7 +440,6 @@ export default function ProfilePage() {
             </form>
           </div>
 
-          {/* Linked OAuth Providers Section */}
           <div className="glass-card rounded-2xl p-8 mb-6 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
               <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -430,7 +478,6 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          {/* Change Password Section */}
           <div className="glass-card rounded-2xl p-8 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
               <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -486,11 +533,13 @@ export default function ProfilePage() {
               </div>
 
               {passwordMessage && (
-                <div className={`mb-5 p-4 rounded-xl border ${
-                  passwordMessage.type === 'success'
-                    ? 'bg-emerald-50/50 dark:bg-emerald-900/20 border-emerald-200/50 dark:border-emerald-700/50 text-emerald-800 dark:text-emerald-400'
-                    : 'bg-red-50/50 dark:bg-red-900/20 border-red-200/50 dark:border-red-700/50 text-red-800 dark:text-red-400'
-                }`}>
+                <div
+                  className={`mb-5 p-4 rounded-xl border ${
+                    passwordMessage.type === 'success'
+                      ? 'bg-emerald-50/50 dark:bg-emerald-900/20 border-emerald-200/50 dark:border-emerald-700/50 text-emerald-800 dark:text-emerald-400'
+                      : 'bg-red-50/50 dark:bg-red-900/20 border-red-200/50 dark:border-red-700/50 text-red-800 dark:text-red-400'
+                  }`}
+                >
                   {passwordMessage.text}
                 </div>
               )}

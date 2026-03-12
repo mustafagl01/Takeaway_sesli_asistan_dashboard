@@ -1,34 +1,35 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createSubscription } from '@/lib/db';
 import { sql } from '@vercel/postgres';
 
 export const runtime = 'nodejs';
 
-// Stripe webhook handler - processes successful payments and activates subscriptions
-let _stripe: Stripe | null = null;
+let stripeClient: Stripe | null = null;
+
 function getStripe(): Stripe {
-  if (!_stripe) {
+  if (!stripeClient) {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) throw new Error('STRIPE_SECRET_KEY is not set');
-    _stripe = new Stripe(key);
+    stripeClient = new Stripe(key);
   }
-  return _stripe;
+
+  return stripeClient;
 }
 
 export async function POST(req: Request) {
   const body = await req.text();
-  const sig = req.headers.get('stripe-signature');
+  const signature = req.headers.get('stripe-signature');
 
-  if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+  if (!signature || !process.env.STRIPE_WEBHOOK_SECRET) {
     return NextResponse.json({ error: 'Missing signature or webhook secret' }, { status: 400 });
   }
 
   let event: Stripe.Event;
   try {
-    event = getStripe().webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err: any) {
-    console.error('Stripe webhook signature verification failed:', err.message);
+    event = getStripe().webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (error: any) {
+    console.error('Stripe webhook signature verification failed:', error.message);
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
@@ -37,12 +38,12 @@ export async function POST(req: Request) {
     const metadata = session.metadata;
 
     if (metadata?.type === 'prepaid_minutes' && metadata.userId && metadata.minutes) {
-      const minutes = parseInt(metadata.minutes);
+      const minutes = Number.parseInt(metadata.minutes, 10);
       const tier = metadata.tier || 'Custom';
       const ratePence = minutes > 800 ? 14 : minutes > 400 ? 16 : 18;
+      const paygRatePence = Math.max(20, Math.round(ratePence * 1.3));
       const now = new Date().toISOString();
 
-      // Set end_date far in the future (no expiry for prepaid minutes)
       const endDate = new Date();
       endDate.setFullYear(endDate.getFullYear() + 10);
 
@@ -53,11 +54,11 @@ export async function POST(req: Request) {
           plan_name: `${tier} Paket (${minutes} dk)`,
           total_minutes: minutes,
           rate_pence: ratePence,
+          payg_rate_pence: paygRatePence,
           start_date: now,
           end_date: endDate.toISOString(),
         });
 
-        // Log billing event
         await sql`
           INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
           VALUES (
@@ -65,14 +66,14 @@ export async function POST(req: Request) {
             ${metadata.userId},
             'package_purchased',
             ${session.amount_total || 0},
-            ${`${minutes} dakika ${tier} paket satın alındı`},
+            ${`${minutes} dakika ${tier} paket satin alindi. PAYG fallback: ${paygRatePence}p/dk.`},
             ${now}
           )
         `;
 
-        console.log(`✅ Subscription created for user ${metadata.userId}: ${minutes} minutes`);
-      } catch (err) {
-        console.error('Failed to create subscription after payment:', err);
+        console.log(`Subscription created for user ${metadata.userId}: ${minutes} minutes`);
+      } catch (error) {
+        console.error('Failed to create subscription after payment:', error);
       }
     }
   }
