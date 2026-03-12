@@ -124,7 +124,7 @@ export async function POST(req: Request) {
 
       if (remainingMinutes <= 0) {
         // === MINUTES DEPLETED - SWITCH TO PAYG ===
-        const paygRate = Math.round(ratePence * 1.3); // 30% premium for PAYG
+        const paygRate = 20; // Flat PAYG rate: 20p/min
 
         await sql`
           UPDATE subscriptions 
