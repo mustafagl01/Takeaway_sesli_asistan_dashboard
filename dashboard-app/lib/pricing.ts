@@ -1,5 +1,6 @@
 export type PresetPackageKey = 'payg' | 'small' | 'medium' | 'pro';
 export type BillingTierName = 'Small' | 'Medium' | 'Pro';
+export const PAYG_RATE_PENCE = 20;
 
 export interface PresetPackageDefinition {
   key: PresetPackageKey;
@@ -16,7 +17,7 @@ export const PRESET_PACKAGE_DEFINITIONS: Record<PresetPackageKey, PresetPackageD
     key: 'payg',
     label: 'Pay As You Go',
     planName: 'Pay As You Go',
-    ratePence: 20,
+    ratePence: PAYG_RATE_PENCE,
     minMinutes: null,
     maxMinutes: null,
     isPayg: true,
@@ -66,7 +67,8 @@ export function calculatePackagePriceInPennies(minutes: number): number {
 }
 
 export function derivePaygRatePence(ratePence: number): number {
-  return Math.max(20, Math.round(ratePence * 1.3));
+  void ratePence;
+  return PAYG_RATE_PENCE;
 }
 
 export function isPresetMinutesValid(presetKey: PresetPackageKey, minutes: number): boolean {

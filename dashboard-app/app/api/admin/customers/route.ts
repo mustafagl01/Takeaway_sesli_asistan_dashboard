@@ -10,6 +10,7 @@ import {
   derivePaygRatePence,
   describePresetRange,
   isPresetMinutesValid,
+  PAYG_RATE_PENCE,
   PRESET_PACKAGE_DEFINITIONS,
   type PresetPackageKey,
 } from '@/lib/pricing';
@@ -17,7 +18,7 @@ import { sql } from '@vercel/postgres';
 
 export const runtime = 'nodejs';
 
-type AdminAction = 'add_minutes' | 'assign_package' | 'create_customer';
+type AdminAction = 'add_minutes' | 'assign_package' | 'create_customer' | 'cancel_package' | 'delete_customer';
 type PackageMode = 'preset' | 'custom';
 
 interface AdminPackageInput {
@@ -305,7 +306,7 @@ export async function POST(req: Request) {
         `;
       } else {
         const now = new Date().toISOString();
-        const packageRate = 20;
+        const packageRate = PAYG_RATE_PENCE;
         const paygRate = derivePaygRatePence(packageRate);
 
         await createSubscription({
@@ -322,6 +323,32 @@ export async function POST(req: Request) {
 
       await recordBillingEvent(userId, 'admin_minutes_added', `Admin tarafindan ${minutes} dakika eklendi`);
       return NextResponse.json({ success: true, message: `${minutes} dakika eklendi.` });
+    }
+
+    if (action === 'cancel_package') {
+      const userId = typeof body.userId === 'string' ? body.userId : '';
+      if (!userId) {
+        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+      }
+
+      const user = await getUserById(userId);
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      const { rowCount } = await sql`
+        UPDATE subscriptions
+        SET status = 'expired'
+        WHERE user_id = ${userId}
+          AND status IN ('active', 'pay_as_you_go')
+      `;
+
+      if (!rowCount) {
+        return NextResponse.json({ error: 'Active package not found' }, { status: 404 });
+      }
+
+      await recordBillingEvent(userId, 'admin_package_cancelled', 'Admin tarafindan aktif paket/PAYG iptal edildi');
+      return NextResponse.json({ success: true, message: `${user.name} icin aktif paket iptal edildi.` });
     }
 
     if (action === 'assign_package') {
@@ -345,6 +372,31 @@ export async function POST(req: Request) {
         message: `${user.name} icin paket atandi.`,
         data: { packageSummary: result.packageSummary },
       });
+    }
+
+    if (action === 'delete_customer') {
+      const userId = typeof body.userId === 'string' ? body.userId : '';
+      if (!userId) {
+        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+      }
+
+      const user = await getUserById(userId);
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      if (user.email === session.user.email) {
+        return NextResponse.json({ error: 'Kendi admin hesabini silemezsin' }, { status: 400 });
+      }
+
+      await recordBillingEvent(userId, 'admin_customer_deleted', `Admin tarafindan musteri hesabi silindi: ${user.email}`);
+
+      const deleteResult = await deleteUser(userId);
+      if (!deleteResult.success) {
+        return NextResponse.json({ error: deleteResult.error || 'Failed to delete customer' }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, message: `${user.email} silindi.` });
     }
 
     if (action === 'create_customer') {

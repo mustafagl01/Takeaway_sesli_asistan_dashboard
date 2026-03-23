@@ -419,6 +419,72 @@ export default function AdminPage() {
     }
   }
 
+  async function handleCancelPackage(customer: CustomerData) {
+    if (!customer.subscription || actionLoading) return;
+
+    const confirmed = window.confirm(
+      `${customer.name} icin aktif paket/PAYG kaydini iptal etmek istediginden emin misin?`
+    );
+    if (!confirmed) return;
+
+    setActionLoading(true);
+
+    try {
+      const res = await fetch('/api/admin/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel_package',
+          userId: customer.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Paket iptal edilemedi');
+      }
+
+      await fetchCustomers();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Sunucu hatasi');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleDeleteCustomer(customer: CustomerData) {
+    if (actionLoading) return;
+
+    const confirmed = window.confirm(
+      `${customer.email} hesabini tamamen silmek istediginden emin misin? Cagrilar ve aktif paketler de kaldirilir.`
+    );
+    if (!confirmed) return;
+
+    setActionLoading(true);
+
+    try {
+      const res = await fetch('/api/admin/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete_customer',
+          userId: customer.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Musteri silinemedi');
+      }
+
+      await fetchCustomers();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Sunucu hatasi');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function handleCreateCustomer() {
     setActionLoading(true);
 
@@ -607,7 +673,7 @@ export default function AdminPage() {
             <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">Musteriler</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Paket atama ve dakika ekleme islemleri buradan yapilir.
+                Paket atama, iptal, dakika ekleme ve musteri silme islemleri buradan yapilir.
               </p>
             </div>
 
@@ -696,13 +762,14 @@ export default function AdminPage() {
                           </span>
                         </td>
                         <td className="px-6 py-5">
-                          <div className="flex items-center justify-end gap-3">
+                          <div className="flex flex-wrap items-center justify-end gap-3">
                             <button
                               type="button"
                               onClick={() => {
                                 setAssignPackageModal({ userId: customer.id, name: customer.name });
                                 setAssignPackageForm(defaultPackageFormState());
                               }}
+                              disabled={actionLoading}
                               className="px-4 py-2 rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-950/60 transition-colors text-sm font-medium"
                             >
                               Paket Ata
@@ -713,9 +780,26 @@ export default function AdminPage() {
                                 setAddMinutesModal({ userId: customer.id, name: customer.name });
                                 setMinutesToAdd(100);
                               }}
+                              disabled={actionLoading}
                               className="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-950/60 transition-colors text-sm font-medium"
                             >
                               + Dakika
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleCancelPackage(customer)}
+                              disabled={actionLoading || !customer.subscription}
+                              className="px-4 py-2 rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-950/60 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Paket Iptal
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteCustomer(customer)}
+                              disabled={actionLoading}
+                              className="px-4 py-2 rounded-xl bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-950/60 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Musteri Sil
                             </button>
                           </div>
                         </td>

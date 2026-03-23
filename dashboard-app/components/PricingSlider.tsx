@@ -9,9 +9,9 @@ import { calculatePackageRatePence, getBillingTierName } from '@/lib/pricing';
  * 
  * An interactive slider that calculates total pricing based on minute tiers.
  * Tiers:
- * - 200 - 400 mins: 20p/min
- * - 401 - 800 mins: 18p/min
- * - 801 - 2000 mins: 15p/min
+ * - 200 - 400 mins: 18p/min
+ * - 401 - 800 mins: 16p/min
+ * - 801+ mins: 14p/min
  */
 export default function PricingSlider() {
     const [minutes, setMinutes] = useState(500);

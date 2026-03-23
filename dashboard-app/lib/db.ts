@@ -5,6 +5,7 @@
 
 import { randomBytes } from 'crypto';
 import { sql } from '@vercel/postgres';
+import { PAYG_RATE_PENCE } from './pricing';
 
 // ============================================================================
 // Type Definitions
@@ -669,7 +670,7 @@ export async function createSubscription(data: {
 }): Promise<DbResult<Subscription>> {
   try {
     const now = new Date().toISOString();
-    const paygRatePence = data.payg_rate_pence ?? Math.max(20, Math.round(data.rate_pence * 1.3));
+    const paygRatePence = data.payg_rate_pence ?? PAYG_RATE_PENCE;
     const nextStatus = data.status || 'active';
 
     // Invalidate previous active or PAYG subscriptions for the user
