@@ -174,7 +174,7 @@ export function verifyRetellSignature(bodyText: string, signature: string | null
   if (retellMatch) {
     const timestamp = retellMatch[1];
     const providedHmac = retellMatch[2].toLowerCase();
-    const signedPayload = `${timestamp}.${bodyText}`;
+    const signedPayload = bodyText + timestamp;
     const expected = crypto.createHmac('sha256', normalizedWebhookKey).update(signedPayload, 'utf8').digest('hex');
     if (expected.length !== providedHmac.length) return false;
     return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(providedHmac, 'utf8'));
