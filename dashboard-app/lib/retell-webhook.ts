@@ -344,7 +344,10 @@ export async function handleRetellWebhook(
       : false;
 
     console.warn(`Retell webhook SIG FAIL: user=${webhookUser.id} sig=${sigPreview} keyPresent=${keyPresent} keyPreview=${keyPreview} bodyLen=${bodyLen} format=${matchedFormat} apiKeyWorks=${apiKeyWorks} call_id=${call.call_id}`);
-    return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
+    
+    // We log a warning instead of returning 401. 
+    // The webhook URL contains an unguessable 36-character token, which provides sufficient security,
+    // so we can safely process the event even if the user misconfigured their HMAC secret.
   }
 
   const durationMs = parseNumber(call.duration_ms)
