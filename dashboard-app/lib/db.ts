@@ -665,10 +665,12 @@ export async function createSubscription(data: {
   payg_rate_pence?: number | null;
   start_date: string;
   end_date: string;
+  status?: 'active' | 'pay_as_you_go';
 }): Promise<DbResult<Subscription>> {
   try {
     const now = new Date().toISOString();
     const paygRatePence = data.payg_rate_pence ?? Math.max(20, Math.round(data.rate_pence * 1.3));
+    const nextStatus = data.status || 'active';
 
     // Invalidate previous active or PAYG subscriptions for the user
     await sql`
@@ -699,7 +701,7 @@ export async function createSubscription(data: {
         ${paygRatePence},
         ${data.start_date},
         ${data.end_date},
-        'active',
+        ${nextStatus},
         ${now}
       )
       RETURNING *

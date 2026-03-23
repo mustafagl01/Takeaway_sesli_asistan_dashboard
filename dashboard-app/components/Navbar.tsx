@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { signOut, useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { useVisualAudio } from './VisualAudioProvider'
+import { isAdminEmail } from '@/lib/admin'
 
 /**
  * Navigation link definition
@@ -31,6 +32,7 @@ export default function Navbar({ className = '' }: NavbarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const { playClick, playHover } = useVisualAudio()
+  const isAdmin = isAdminEmail(session?.user?.email)
 
   const navLinks: NavLink[] = [
     {
@@ -58,6 +60,13 @@ export default function Navbar({ className = '' }: NavbarProps) {
       label: 'Profile',
       description: 'Account settings',
     },
+    ...(isAdmin
+      ? [{
+        href: '/dashboard/admin',
+        label: 'Admin',
+        description: 'Customer management',
+      }]
+      : []),
   ]
 
   const handleLogout = async () => {

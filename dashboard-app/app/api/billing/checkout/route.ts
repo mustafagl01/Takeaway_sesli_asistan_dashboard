@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import Stripe from 'stripe';
+import { calculatePackagePriceInPennies, calculatePackageRatePence, getBillingTierName } from '@/lib/pricing';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,39 +14,6 @@ function getStripe(): Stripe {
         _stripe = new Stripe(key);
     }
     return _stripe;
-}
-
-/**
- * Calculates the price based on input minutes and tiers.
- * Tiers (Matching PricingSlider.tsx):
- * - 200-400: 18p/min (Small)
- * - 401-800: 16p/min (Medium)
- * - 801+:    14p/min (Pro)
- *
- * @param minutes - Number of minutes selected
- * @returns Total price in pennies (integer)
- */
-function calculatePriceInPennies(minutes: number): number {
-    let rate = 0.18;
-    if (minutes > 800) {
-        rate = 0.14;
-    } else if (minutes > 400) {
-        rate = 0.16;
-    } else {
-        rate = 0.18;
-    }
-
-    // Calculate total, convert to pennies and handle rounding
-    return Math.round(minutes * rate * 100);
-}
-
-/**
- * Determines the tier name based on minute count
- */
-function getTierName(minutes: number): string {
-    if (minutes > 800) return 'Pro';
-    if (minutes > 400) return 'Medium';
-    return 'Small';
 }
 
 export async function POST(req: Request) {
@@ -72,9 +40,9 @@ export async function POST(req: Request) {
         }
 
         // 4. Calculate Total Price
-        const totalPennies = calculatePriceInPennies(minutes);
-        const tierName = getTierName(minutes);
-        const rateP = minutes > 800 ? 14 : minutes > 400 ? 16 : 18;
+        const totalPennies = calculatePackagePriceInPennies(minutes);
+        const tierName = getBillingTierName(minutes);
+        const rateP = calculatePackageRatePence(minutes);
 
         // 5. Create Stripe Checkout Session (one-time payment for prepaid minutes)
         const checkoutSession = await getStripe().checkout.sessions.create({

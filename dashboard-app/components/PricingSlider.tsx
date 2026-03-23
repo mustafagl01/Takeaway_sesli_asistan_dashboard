@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { calculatePackageRatePence, getBillingTierName } from '@/lib/pricing';
 
 /**
  * Pricing Slider Component
@@ -22,19 +23,8 @@ export default function PricingSlider() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        let currentRate = 0.18;
-        let currentTier: 'Small' | 'Medium' | 'Pro' = 'Small';
-
-        if (minutes > 800) {
-            currentRate = 0.14;
-            currentTier = 'Pro';
-        } else if (minutes > 400) {
-            currentRate = 0.16;
-            currentTier = 'Medium';
-        } else {
-            currentRate = 0.18;
-            currentTier = 'Small';
-        }
+        const currentRate = calculatePackageRatePence(minutes) / 100;
+        const currentTier = getBillingTierName(minutes);
 
         setRate(currentRate);
         setTier(currentTier);

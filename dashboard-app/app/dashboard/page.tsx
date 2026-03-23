@@ -17,6 +17,7 @@ import ActiveSubscriptionWidget from '@/components/ActiveSubscriptionWidget';
 import AutoRefreshOnVisible from '@/components/AutoRefreshOnVisible';
 import { sql } from '@vercel/postgres';
 import { formatDurationFromMilliseconds } from '@/lib/duration';
+import { isAdminEmail } from '@/lib/admin';
 
 /**
  * Dashboard metrics data
@@ -37,7 +38,7 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  const isAdmin = session.user.email === 'mustafagl01@gmail.com';
+  const isAdmin = isAdminEmail(session.user.email);
 
   if (isAdmin) {
     return <AdminDashboardView />;

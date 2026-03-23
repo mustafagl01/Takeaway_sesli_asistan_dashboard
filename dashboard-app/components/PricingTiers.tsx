@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { PRESET_PACKAGE_DEFINITIONS } from '@/lib/pricing';
 
 interface TierData {
     name: string;
@@ -21,9 +22,9 @@ interface TierData {
 
 const tiers: TierData[] = [
     {
-        name: 'Pay As You Go',
+        name: PRESET_PACKAGE_DEFINITIONS.payg.label,
         emoji: '💳',
-        rate: '20',
+        rate: PRESET_PACKAGE_DEFINITIONS.payg.ratePence.toString(),
         rateSuffix: 'p / dakika',
         rangeLabel: 'Taahhütsüz',
         totalRange: 'Kullandığın kadar öde',
@@ -39,9 +40,9 @@ const tiers: TierData[] = [
         borderColor: 'border-gray-200 dark:border-gray-700',
     },
     {
-        name: 'Small',
+        name: PRESET_PACKAGE_DEFINITIONS.small.label,
         emoji: '🌱',
-        rate: '18',
+        rate: PRESET_PACKAGE_DEFINITIONS.small.ratePence.toString(),
         rateSuffix: 'p / dakika',
         rangeLabel: '200 – 400 dk paket',
         totalRange: '£36 – £72 toplam',
@@ -57,9 +58,9 @@ const tiers: TierData[] = [
         borderColor: 'border-blue-200 dark:border-blue-700',
     },
     {
-        name: 'Medium',
+        name: PRESET_PACKAGE_DEFINITIONS.medium.label,
         emoji: '🚀',
-        rate: '16',
+        rate: PRESET_PACKAGE_DEFINITIONS.medium.ratePence.toString(),
         rateSuffix: 'p / dakika',
         rangeLabel: '401 – 800 dk paket',
         totalRange: '£64 – £128 toplam',
@@ -76,9 +77,9 @@ const tiers: TierData[] = [
         borderColor: 'border-indigo-400 dark:border-indigo-500',
     },
     {
-        name: 'Pro',
+        name: PRESET_PACKAGE_DEFINITIONS.pro.label,
         emoji: '💎',
-        rate: '14',
+        rate: PRESET_PACKAGE_DEFINITIONS.pro.ratePence.toString(),
         rateSuffix: 'p / dakika',
         rangeLabel: '801 – 1500+ dk paket',
         totalRange: '£112 – £210+ toplam',
