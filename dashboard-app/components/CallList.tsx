@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { Call } from '@/lib/db'
 import { formatDurationFromMilliseconds } from '@/lib/duration'
@@ -28,6 +28,12 @@ interface PaginationState {
   total: number
 }
 
+interface CallsApiResponse {
+  calls: Call[]
+  total: number
+  totalCostCents: number
+}
+
 /**
  * Call List Props
  *
@@ -41,6 +47,57 @@ export interface CallListProps {
   /** Total cost in cents (all or filtered); shown above table */
   initialTotalCostCents?: number
   userId: string
+}
+
+async function fetchCallsFromApi(
+  userId: string,
+  page: number,
+  limit: number,
+  filters: CallFilters,
+  signal?: AbortSignal
+): Promise<CallsApiResponse> {
+  const params = new URLSearchParams({
+    userId,
+    limit: limit.toString(),
+    offset: ((page - 1) * limit).toString(),
+  })
+
+  if (filters.startDate) {
+    params.append('startDate', filters.startDate)
+  }
+
+  if (filters.endDate) {
+    params.append('endDate', filters.endDate)
+  }
+
+  if (filters.status) {
+    params.append('status', filters.status)
+  }
+
+  if (filters.phoneNumber) {
+    params.append('phoneNumber', filters.phoneNumber)
+  }
+
+  const response = await fetch(`/api/calls?${params.toString()}`, {
+    cache: 'no-store',
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch calls')
+  }
+
+  const data = await response.json()
+
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch calls')
+  }
+
+  return {
+    calls: data.data.calls,
+    total: data.data.total,
+    totalCostCents: typeof data.data.totalCostCents === 'number' ? data.data.totalCostCents : 0,
+  }
 }
 
 // ============================================================================
@@ -85,67 +142,13 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
   const [totalCostCents, setTotalCostCents] = useState<number>(initialTotalCostCents)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const requestInFlightRef = useRef(false)
 
   // Form state for filters
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [status, setStatus] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
-
-  /**
-   * Fetch calls with filters and pagination
-   */
-  const fetchCalls = async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
-
-      // Build query parameters
-      const params = new URLSearchParams({
-        userId,
-        limit: pagination.limit.toString(),
-        offset: ((pagination.page - 1) * pagination.limit).toString(),
-      })
-
-      if (filters.startDate) {
-        params.append('startDate', filters.startDate)
-      }
-
-      if (filters.endDate) {
-        params.append('endDate', filters.endDate)
-      }
-
-      if (filters.status) {
-        params.append('status', filters.status)
-      }
-
-      if (filters.phoneNumber) {
-        params.append('phoneNumber', filters.phoneNumber)
-      }
-
-      // Fetch filtered calls from API
-      const response = await fetch(`/api/calls?${params.toString()}`)
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch calls')
-      }
-
-      const data = await response.json()
-
-      if (data.success) {
-        setCalls(data.data.calls)
-        setPagination((prev) => ({ ...prev, total: data.data.total }))
-        setTotalCostCents(typeof data.data.totalCostCents === 'number' ? data.data.totalCostCents : 0)
-      } else {
-        throw new Error(data.error || 'Failed to fetch calls')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-      setCalls([])
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   /**
    * Apply filters and reset to first page
@@ -196,8 +199,113 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
    * Fetch calls when pagination or filters change (including when filters are cleared)
    */
   useEffect(() => {
-    fetchCalls()
-  }, [pagination.page, filters])
+    const controller = new AbortController()
+    let isMounted = true
+
+    const loadCalls = async () => {
+      if (requestInFlightRef.current) {
+        return
+      }
+
+      requestInFlightRef.current = true
+
+      try {
+        setIsLoading(true)
+        setError(null)
+
+        const data = await fetchCallsFromApi(
+          userId,
+          pagination.page,
+          pagination.limit,
+          filters,
+          controller.signal
+        )
+
+        if (!isMounted) {
+          return
+        }
+
+        setCalls(data.calls)
+        setPagination((prev) => ({ ...prev, total: data.total }))
+        setTotalCostCents(data.totalCostCents)
+      } catch (err) {
+        if (!isMounted || controller.signal.aborted) {
+          return
+        }
+
+        setError(err instanceof Error ? err.message : 'An error occurred')
+        setCalls([])
+      } finally {
+        requestInFlightRef.current = false
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadCalls()
+
+    return () => {
+      isMounted = false
+      controller.abort()
+    }
+  }, [filters, pagination.limit, pagination.page, userId])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const pollCalls = async () => {
+      if (document.hidden || requestInFlightRef.current) {
+        return
+      }
+
+      requestInFlightRef.current = true
+
+      try {
+        const data = await fetchCallsFromApi(
+          userId,
+          pagination.page,
+          pagination.limit,
+          filters
+        )
+
+        if (!isMounted) {
+          return
+        }
+
+        setCalls(data.calls)
+        setPagination((prev) => ({ ...prev, total: data.total }))
+        setTotalCostCents(data.totalCostCents)
+        setError(null)
+      } catch (err) {
+        if (!isMounted) {
+          return
+        }
+
+        setError(err instanceof Error ? err.message : 'An error occurred')
+      } finally {
+        requestInFlightRef.current = false
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void pollCalls()
+    }, 10000)
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void pollCalls()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isMounted = false
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [filters, pagination.limit, pagination.page, userId])
 
   // Calculate pagination info
   const totalPages = Math.ceil(pagination.total / pagination.limit)
@@ -301,6 +409,10 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
             Clear Filters
           </button>
         </div>
+
+        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+          This page refreshes automatically every 10 seconds while it is open.
+        </p>
       </div>
 
       {/* Error State */}

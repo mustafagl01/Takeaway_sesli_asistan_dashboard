@@ -14,6 +14,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getCallMetrics, getRecentCalls, getBusinessesForUser, type Call } from '@/lib/db';
 import ActiveSubscriptionWidget from '@/components/ActiveSubscriptionWidget';
+import AutoRefreshOnVisible from '@/components/AutoRefreshOnVisible';
 import { sql } from '@vercel/postgres';
 import { formatDurationFromMilliseconds } from '@/lib/duration';
 
@@ -66,6 +67,8 @@ export default async function DashboardPage() {
 
   return (
     <>
+      <AutoRefreshOnVisible />
+
       {/* Aurora Animated Background */}
       <div className="aurora-bg">
         <div className="aurora-layer aurora-layer-1" />

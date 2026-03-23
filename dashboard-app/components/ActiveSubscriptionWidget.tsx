@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 
 interface SubscriptionData {
@@ -16,22 +16,67 @@ interface SubscriptionData {
 export default function ActiveSubscriptionWidget() {
     const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
     const [loading, setLoading] = useState(true);
+    const requestInFlightRef = useRef(false);
 
     useEffect(() => {
-        async function fetchSubscription() {
+        let isMounted = true;
+
+        async function fetchSubscription(showLoader = false) {
+            if (requestInFlightRef.current) {
+                return;
+            }
+
+            requestInFlightRef.current = true;
+
             try {
-                const response = await fetch('/api/billing/subscription');
+                if (showLoader) {
+                    setLoading(true);
+                }
+
+                const response = await fetch('/api/billing/subscription', {
+                    cache: 'no-store',
+                });
                 const data = await response.json();
+                if (!isMounted) {
+                    return;
+                }
+
                 if (data.success && data.data) {
                     setSubscription(data.data);
+                } else if (data.success) {
+                    setSubscription(null);
                 }
             } catch (error) {
                 console.error('Failed to fetch subscription:', error);
             } finally {
-                setLoading(false);
+                requestInFlightRef.current = false;
+                if (isMounted) {
+                    setLoading(false);
+                }
             }
         }
-        fetchSubscription();
+
+        void fetchSubscription(true);
+
+        const intervalId = window.setInterval(() => {
+            if (!document.hidden) {
+                void fetchSubscription();
+            }
+        }, 10000);
+
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                void fetchSubscription();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            isMounted = false;
+            window.clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, []);
 
     if (loading) {

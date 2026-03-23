@@ -348,7 +348,7 @@ export default function ProfilePage() {
                   className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200"
                 />
                 <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  Use this exact URL in the corresponding Retell workspace. Each customer should keep their own unique URL.
+                  Use this exact URL in Retell as-is. Do not replace it with the generic /api/retell/webhook route, because each customer has a unique token.
                 </p>
               </div>
 
