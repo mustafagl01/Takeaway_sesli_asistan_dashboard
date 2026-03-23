@@ -43,13 +43,27 @@ export async function POST(req: Request) {
       const ratePence = minutes > 800 ? 14 : minutes > 400 ? 16 : 18;
       const paygRatePence = Math.max(20, Math.round(ratePence * 1.3));
       const now = new Date().toISOString();
+      const subscriptionId = `sub_${session.id}`;
+      const billingEventId = `be_checkout_${session.id}`;
 
       const endDate = new Date();
       endDate.setFullYear(endDate.getFullYear() + 10);
 
       try {
-        await createSubscription({
-          id: `sub_${session.id}`,
+        const { rows: existingSubscriptions } = await sql<{ id: string }>`
+          SELECT id
+          FROM subscriptions
+          WHERE id = ${subscriptionId}
+          LIMIT 1
+        `;
+
+        if (existingSubscriptions[0]) {
+          console.log(`Stripe webhook duplicate ignored for session ${session.id}`);
+          return NextResponse.json({ received: true, duplicate: true });
+        }
+
+        const createResult = await createSubscription({
+          id: subscriptionId,
           user_id: metadata.userId,
           plan_name: `${tier} Paket (${minutes} dk)`,
           total_minutes: minutes,
@@ -59,21 +73,27 @@ export async function POST(req: Request) {
           end_date: endDate.toISOString(),
         });
 
+        if (!createResult.success) {
+          throw new Error(createResult.error || 'Failed to create subscription');
+        }
+
         await sql`
           INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
           VALUES (
-            ${'be_' + Date.now()},
+            ${billingEventId},
             ${metadata.userId},
             'package_purchased',
             ${session.amount_total || 0},
             ${`${minutes} dakika ${tier} paket satin alindi. PAYG fallback: ${paygRatePence}p/dk.`},
             ${now}
           )
+          ON CONFLICT (id) DO NOTHING
         `;
 
         console.log(`Subscription created for user ${metadata.userId}: ${minutes} minutes`);
       } catch (error) {
         console.error('Failed to create subscription after payment:', error);
+        return NextResponse.json({ error: 'Failed to process checkout session' }, { status: 500 });
       }
     }
   }

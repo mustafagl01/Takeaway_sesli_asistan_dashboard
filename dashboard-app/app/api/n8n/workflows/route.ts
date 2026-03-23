@@ -264,12 +264,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 // ============================================================================
 
 /**
- * Edge runtime configuration
+ * Node.js runtime configuration
  *
- * This API route runs on Cloudflare Workers edge runtime.
- * Edge functions provide low-latency responses and global distribution.
+ * This route depends on NextAuth and server-side database/auth helpers,
+ * so it must run on the Node.js runtime.
  *
  * @see https://nextjs.org/docs/app/building-your-application/rendering/edge-and-nodejs-runtimes
  */
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 

@@ -465,7 +465,7 @@ export async function getCallsByBusinessId(
 }
 
 export async function getCallsByDateRange(
-  businessId: string,
+  userId: string,
   startDate: string,
   endDate: string,
   limit = 100,
@@ -474,7 +474,7 @@ export async function getCallsByDateRange(
   try {
     const { rows } = await sql<Call>`
       SELECT * FROM calls
-      WHERE business_id = ${businessId}
+      WHERE user_id = ${userId}
         AND call_date >= ${startDate}
         AND call_date <= ${endDate}
       ORDER BY call_date DESC

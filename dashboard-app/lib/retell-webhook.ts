@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
+import { getCallDetailsViaApi } from '@/lib/retell';
 
 type RetellCallCostPayload = {
   combined_cost?: number | string | null;
@@ -39,6 +40,8 @@ type RetellWebhookUser = {
   id: string;
   email: string;
   name: string;
+  phone: string | null;
+  retell_api_key: string | null;
   retell_webhook_key: string | null;
   retell_webhook_token: string | null;
   retell_agent_id: string | null;
@@ -95,7 +98,7 @@ function getMetadataValue(metadata: RetellCallMetadata | null | undefined, keys:
 
 async function findWebhookUserByToken(webhookToken: string): Promise<RetellWebhookUser | null> {
   const { rows } = await sql<RetellWebhookUser>`
-    SELECT id, email, name, retell_webhook_key, retell_webhook_token, retell_agent_id
+    SELECT id, email, name, phone, retell_api_key, retell_webhook_key, retell_webhook_token, retell_agent_id
     FROM users
     WHERE retell_webhook_token = ${webhookToken}
     LIMIT 1
@@ -106,7 +109,7 @@ async function findWebhookUserByToken(webhookToken: string): Promise<RetellWebho
 
 async function findWebhookUserById(userId: string): Promise<RetellWebhookUser | null> {
   const { rows } = await sql<RetellWebhookUser>`
-    SELECT id, email, name, retell_webhook_key, retell_webhook_token, retell_agent_id
+    SELECT id, email, name, phone, retell_api_key, retell_webhook_key, retell_webhook_token, retell_agent_id
     FROM users
     WHERE id = ${userId}
     LIMIT 1
@@ -117,7 +120,7 @@ async function findWebhookUserById(userId: string): Promise<RetellWebhookUser | 
 
 async function findWebhookUserByAgentId(agentId: string): Promise<RetellWebhookUser | null> {
   const { rows } = await sql<RetellWebhookUser>`
-    SELECT id, email, name, retell_webhook_key, retell_webhook_token, retell_agent_id
+    SELECT id, email, name, phone, retell_api_key, retell_webhook_key, retell_webhook_token, retell_agent_id
     FROM users
     WHERE retell_agent_id = ${agentId}
     LIMIT 1
@@ -174,9 +177,25 @@ export function verifyRetellSignature(bodyText: string, signature: string | null
   return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(normalizedSignature, 'utf8'));
 }
 
+function getTrustedForwardSecret(): string | null {
+  return normalizePlainText(process.env.RETELL_FORWARD_SECRET)
+    || normalizePlainText(process.env.CRON_SECRET);
+}
+
+function isTrustedForwardRequest(req: Request): boolean {
+  const providedSecret = normalizePlainText(req.headers.get('x-mgl-forward-secret'));
+  const expectedSecret = getTrustedForwardSecret();
+
+  if (!providedSecret || !expectedSecret || providedSecret.length !== expectedSecret.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(Buffer.from(providedSecret, 'utf8'), Buffer.from(expectedSecret, 'utf8'));
+}
+
 async function sendAlert(userId: string, message: string) {
   try {
-    const { rows } = await sql`SELECT email, name FROM users WHERE id = ${userId} LIMIT 1`;
+    const { rows } = await sql`SELECT email, name, phone FROM users WHERE id = ${userId} LIMIT 1`;
     const user = rows[0];
 
     if (!user) {
@@ -197,8 +216,74 @@ async function sendAlert(userId: string, message: string) {
     `;
 
     console.log(`Alert for user ${userId} (${user.email}): ${message}`);
+
+    // Trigger n8n webhook for SMS/External notification
+    const n8nWebhookUrl = process.env.N8N_ALERT_WEBHOOK_URL;
+    if (n8nWebhookUrl) {
+      try {
+        await fetch(n8nWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            email: user.email,
+            name: user.name,
+            phone: user.phone || '', // Include phone number for Twilio
+            message,
+            timestamp: new Date().toISOString()
+          })
+        });
+        console.log('Usage alert triggered to n8n successfully');
+      } catch (n8nErr) {
+        console.error('Failed to trigger n8n alert:', n8nErr);
+      }
+    }
   } catch (err) {
     console.error('Failed to send alert:', err);
+  }
+}
+
+async function autoSyncCallFromRetell(
+  callId: string,
+  webhookUser: RetellWebhookUser,
+  activeRatePence: number | null,
+  fallbackDurationMs: number
+) {
+  const apiKey = normalizePlainText(webhookUser.retell_api_key);
+  if (!apiKey) {
+    return;
+  }
+
+  try {
+    const detailResult = await getCallDetailsViaApi(callId, apiKey);
+    if (!detailResult.success || !detailResult.data) {
+      return;
+    }
+
+    const detail = detailResult.data;
+    const syncedDurationMs = detail.duration != null
+      ? Math.max(0, Math.round(detail.duration * 1000))
+      : fallbackDurationMs;
+    const syncedMinutes = parseFloat(((syncedDurationMs || 0) / 60000).toFixed(3));
+    const syncedCustomerCostMinorUnits = activeRatePence != null
+      ? Math.round(syncedMinutes * activeRatePence)
+      : null;
+    const syncedCallCostMinorUnits = detail.call_cost?.combined_cost != null
+      ? Math.round(detail.call_cost.combined_cost)
+      : null;
+
+    await sql`
+      UPDATE calls
+      SET duration = ${syncedDurationMs},
+          transcript = COALESCE(${detail.transcript || null}, transcript),
+          recording_url = COALESCE(${detail.recording_url || null}, recording_url),
+          call_cost_cents = COALESCE(${syncedCallCostMinorUnits}, call_cost_cents),
+          customer_cost_cents = COALESCE(${syncedCustomerCostMinorUnits}, customer_cost_cents),
+          call_date = COALESCE(${detail.start_time || null}, call_date)
+      WHERE id = ${callId}
+    `;
+  } catch (error) {
+    console.warn(`Retell auto-sync failed for call ${callId}:`, error);
   }
 }
 
@@ -232,7 +317,8 @@ export async function handleRetellWebhook(
   }
 
   const signature = req.headers.get('x-retell-signature');
-  if (!verifyRetellSignature(bodyText, signature, webhookUser.retell_webhook_key)) {
+  const trustedForward = isTrustedForwardRequest(req);
+  if (!trustedForward && !verifyRetellSignature(bodyText, signature, webhookUser.retell_webhook_key)) {
     console.warn(`Retell webhook: invalid signature for user ${webhookUser.id}`);
     return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
   }
@@ -286,6 +372,13 @@ export async function handleRetellWebhook(
       call_cost_cents = COALESCE(EXCLUDED.call_cost_cents, calls.call_cost_cents),
       customer_cost_cents = COALESCE(EXCLUDED.customer_cost_cents, calls.customer_cost_cents)
   `;
+
+  await autoSyncCallFromRetell(
+    call.call_id,
+    webhookUser,
+    subscription ? activeRatePence : null,
+    durationMs || 0
+  );
 
   if (subscription && subscription.status === 'active') {
     const { rows: usageRows } = await sql<{ sum: number }>`
@@ -354,6 +447,7 @@ export async function handleRetellWebhook(
     received: true,
     user_id: webhookUser.id,
     minutes_charged: durationMinutes,
+    forwarded_via_n8n: trustedForward,
   });
 }
 
