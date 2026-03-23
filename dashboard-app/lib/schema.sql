@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS users (
   retell_webhook_key TEXT,
   retell_webhook_token TEXT UNIQUE,
   retell_agent_id TEXT UNIQUE,
+  stripe_customer_id TEXT,
+  stripe_default_payment_method_id TEXT,
+  auto_payg_enabled BOOLEAN DEFAULT FALSE,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -53,6 +56,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   end_date TEXT NOT NULL,
   status TEXT NOT NULL,
   alert_sent_at TEXT,
+  payg_billed_until TEXT,
   created_at TEXT NOT NULL
 );
 

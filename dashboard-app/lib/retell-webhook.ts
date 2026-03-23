@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
 import { getCallDetailsViaApi } from '@/lib/retell';
+import { createSubscription } from '@/lib/db';
+import { PAYG_RATE_PENCE } from './pricing';
 
 type RetellCallCostPayload = {
   combined_cost?: number | string | null;
@@ -45,6 +47,9 @@ type RetellWebhookUser = {
   retell_webhook_key: string | null;
   retell_webhook_token: string | null;
   retell_agent_id: string | null;
+  stripe_customer_id: string | null;
+  stripe_default_payment_method_id: string | null;
+  auto_payg_enabled: boolean;
 };
 
 type RetellSubscriptionRow = {
@@ -56,6 +61,7 @@ type RetellSubscriptionRow = {
   payg_rate_pence: number | null;
   start_date: string;
   alert_sent_at: string | null;
+  payg_billed_until: string | null;
 };
 
 function normalizePlainText(value: unknown): string | null {
@@ -98,7 +104,8 @@ function getMetadataValue(metadata: RetellCallMetadata | null | undefined, keys:
 
 async function findWebhookUserByToken(webhookToken: string): Promise<RetellWebhookUser | null> {
   const { rows } = await sql<RetellWebhookUser>`
-    SELECT id, email, name, phone, retell_api_key, retell_webhook_key, retell_webhook_token, retell_agent_id
+    SELECT id, email, name, phone, retell_api_key, retell_webhook_key, retell_webhook_token, retell_agent_id,
+           stripe_customer_id, stripe_default_payment_method_id, auto_payg_enabled
     FROM users
     WHERE retell_webhook_token = ${webhookToken}
     LIMIT 1
@@ -109,7 +116,8 @@ async function findWebhookUserByToken(webhookToken: string): Promise<RetellWebho
 
 async function findWebhookUserById(userId: string): Promise<RetellWebhookUser | null> {
   const { rows } = await sql<RetellWebhookUser>`
-    SELECT id, email, name, phone, retell_api_key, retell_webhook_key, retell_webhook_token, retell_agent_id
+    SELECT id, email, name, phone, retell_api_key, retell_webhook_key, retell_webhook_token, retell_agent_id,
+           stripe_customer_id, stripe_default_payment_method_id, auto_payg_enabled
     FROM users
     WHERE id = ${userId}
     LIMIT 1
@@ -120,7 +128,8 @@ async function findWebhookUserById(userId: string): Promise<RetellWebhookUser | 
 
 async function findWebhookUserByAgentId(agentId: string): Promise<RetellWebhookUser | null> {
   const { rows } = await sql<RetellWebhookUser>`
-    SELECT id, email, name, phone, retell_api_key, retell_webhook_key, retell_webhook_token, retell_agent_id
+    SELECT id, email, name, phone, retell_api_key, retell_webhook_key, retell_webhook_token, retell_agent_id,
+           stripe_customer_id, stripe_default_payment_method_id, auto_payg_enabled
     FROM users
     WHERE retell_agent_id = ${agentId}
     LIMIT 1
@@ -298,6 +307,16 @@ async function autoSyncCallFromRetell(
   }
 }
 
+async function getQueuedSubscription(userId: string): Promise<RetellSubscriptionRow | null> {
+  const { rows } = await sql<RetellSubscriptionRow>`
+    SELECT * FROM subscriptions
+    WHERE user_id = ${userId} AND status = 'queued'
+    ORDER BY created_at ASC LIMIT 1
+  `;
+
+  return rows[0] || null;
+}
+
 export async function handleRetellWebhook(
   req: Request,
   options?: { webhookToken?: string }
@@ -427,44 +446,113 @@ export async function handleRetellWebhook(
       || (Date.now() - new Date(lastAlertAt).getTime()) > alertCooldownHours * 60 * 60 * 1000;
 
     if (remainingMinutes <= 0) {
-      const paygRate = 20; // Flat PAYG rate: always 20p/min
-
-      await sql`
-        UPDATE subscriptions
-        SET status = 'pay_as_you_go',
-            rate_pence = ${paygRate},
-            payg_rate_pence = ${paygRate}
-        WHERE id = ${subscription.id}
-      `;
-
-      await sql`
-        INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
-        VALUES (
-          ${'be_depleted_' + Date.now()},
-          ${webhookUser.id},
-          'minutes_depleted',
-          ${0},
-          ${`${totalMinutes} dakikalik paket tukendi. Pay-as-you-go (${paygRate}p/dk) aktif.`},
-          ${now}
-        )
-      `;
-
-      await sendAlert(
-        webhookUser.id,
-        `Paketiniz tukendi. ${totalMinutes} dakikalik paketiniz bitti. Artik pay-as-you-go (${paygRate}p/dk) ile ucretlendirileceksiniz. Yeni paket icin: https://www.mglsystems.uk/dashboard/billing`
+      const queuedSubscription = await getQueuedSubscription(webhookUser.id);
+      const hasCardOnFile = !!(
+        webhookUser.auto_payg_enabled &&
+        webhookUser.stripe_customer_id &&
+        webhookUser.stripe_default_payment_method_id
       );
 
-      await sql`UPDATE subscriptions SET alert_sent_at = ${now} WHERE id = ${subscription.id}`;
+      if (queuedSubscription) {
+        await sql`
+          UPDATE subscriptions
+          SET status = 'expired'
+          WHERE id = ${subscription.id}
+        `;
+
+        await sql`
+          UPDATE subscriptions
+          SET status = 'active',
+              start_date = ${now},
+              alert_sent_at = ${null}
+          WHERE id = ${queuedSubscription.id}
+        `;
+
+        await sql`
+          INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
+          VALUES (
+            ${'be_next_activated_' + Date.now()},
+            ${webhookUser.id},
+            'next_package_activated',
+            ${0},
+            ${`${totalMinutes} dakikalik paket tukendi. Siradaki paket otomatik aktif edildi: ${queuedSubscription.plan_name}.`},
+            ${now}
+          )
+        `;
+
+        await sendAlert(
+          webhookUser.id,
+          `Paketiniz bitti ve siradaki paketiniz otomatik devreye alindi: ${queuedSubscription.plan_name}. Dashboard: https://www.mglsystems.uk/dashboard/billing`
+        );
+      } else if (hasCardOnFile) {
+        const createResult = await createSubscription({
+          id: `sub_payg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          user_id: webhookUser.id,
+          plan_name: 'Pay As You Go',
+          total_minutes: 0,
+          rate_pence: PAYG_RATE_PENCE,
+          payg_rate_pence: PAYG_RATE_PENCE,
+          start_date: now,
+          end_date: now,
+          status: 'pay_as_you_go',
+          replaceCurrent: true,
+          payg_billed_until: now,
+        });
+
+        if (!createResult.success) {
+          console.error('Failed to create automatic PAYG fallback:', createResult.error);
+        }
+
+        await sql`
+          INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
+          VALUES (
+            ${'be_depleted_' + Date.now()},
+            ${webhookUser.id},
+            'minutes_depleted',
+            ${0},
+            ${`${totalMinutes} dakikalik paket tukendi. Kart kaydi oldugu icin otomatik PAYG (${PAYG_RATE_PENCE}p/dk) aktif edildi.`},
+            ${now}
+          )
+        `;
+
+        await sendAlert(
+          webhookUser.id,
+          `Paketiniz tukendi. Kartiniz kayitli oldugu icin otomatik ${PAYG_RATE_PENCE}p/dk PAYG moduna gecildi. Istediginiz zaman siradaki paketi satin alabilirsiniz: https://www.mglsystems.uk/dashboard/billing`
+        );
+      } else {
+        await sql`
+          UPDATE subscriptions
+          SET status = 'expired'
+          WHERE id = ${subscription.id}
+        `;
+
+        await sql`
+          INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
+          VALUES (
+            ${'be_depleted_' + Date.now()},
+            ${webhookUser.id},
+            'minutes_depleted',
+            ${0},
+            ${`${totalMinutes} dakikalik paket tukendi. Siradaki paket bulunamadi ve otomatik PAYG acilmadi.`},
+            ${now}
+          )
+        `;
+
+        await sendAlert(
+          webhookUser.id,
+          `Paketiniz tukendi. Siradaki paketiniz bulunmadigi ve kart kaydiniz olmadigi icin yeni paket satin almaniz gerekiyor: https://www.mglsystems.uk/dashboard/billing`
+        );
+      }
     } else if (percentRemaining <= 10 && canSendAlert) {
       await sendAlert(
         webhookUser.id,
-        `Son ${remainingMinutes} dakikaniz kaldi. (${totalMinutes} dk paketinizin %${Math.round(percentRemaining)}'i). Paket bitince otomatik ucretlendirme baslar. Yeni paket: https://www.mglsystems.uk/dashboard/billing`
+        `Son ${remainingMinutes} dakikaniz kaldi. (${totalMinutes} dk paketinizin %${Math.round(percentRemaining)}'i). Siradaki paketinizi simdiden satin alabilirsiniz: https://www.mglsystems.uk/dashboard/billing`
       );
       await sql`UPDATE subscriptions SET alert_sent_at = ${now} WHERE id = ${subscription.id}`;
     } else if (percentRemaining <= 20 && percentRemaining > 10 && canSendAlert) {
       await sendAlert(
         webhookUser.id,
-        `Paketinizin %${Math.round(percentRemaining)}'i kaldi (${remainingMinutes}/${totalMinutes} dk). Yeni paket almak icin: https://www.mglsystems.uk/dashboard/billing`
+        `Paketinizin %${Math.round(percentRemaining)}'i kaldi (${remainingMinutes}/${totalMinutes} dk). Isterseniz siradaki paketinizi simdiden ayarlayabilirsiniz: https://www.mglsystems.uk/dashboard/billing`
       );
       await sql`UPDATE subscriptions SET alert_sent_at = ${now} WHERE id = ${subscription.id}`;
     }
@@ -477,4 +565,3 @@ export async function handleRetellWebhook(
     forwarded_via_n8n: trustedForward,
   });
 }
-

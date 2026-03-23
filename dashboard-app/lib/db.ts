@@ -27,6 +27,9 @@ export interface User {
   retell_webhook_token: string | null;
   /** Optional fallback agent identifier for legacy webhook routing. */
   retell_agent_id: string | null;
+  stripe_customer_id: string | null;
+  stripe_default_payment_method_id: string | null;
+  auto_payg_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -81,6 +84,7 @@ export interface Subscription {
   rate_pence: number;
   payg_rate_pence?: number | null;
   alert_sent_at?: string | null;
+  payg_billed_until?: string | null;
   start_date: string;
   end_date: string;
   status: string;
@@ -171,6 +175,9 @@ export async function createUser(userData: {
         retell_webhook_key,
         retell_webhook_token,
         retell_agent_id,
+        stripe_customer_id,
+        stripe_default_payment_method_id,
+        auto_payg_enabled,
         created_at,
         updated_at
       )
@@ -186,6 +193,9 @@ export async function createUser(userData: {
         ${null},
         ${webhookToken},
         ${null},
+        ${null},
+        ${null},
+        ${false},
         ${now},
         ${now}
       )
@@ -199,7 +209,7 @@ export async function createUser(userData: {
 
 export async function updateUser(
   id: string,
-  updates: Partial<Pick<User, 'name' | 'image' | 'password_hash' | 'google_id' | 'apple_id' | 'retell_api_key' | 'retell_webhook_key' | 'retell_webhook_token' | 'retell_agent_id'>>
+  updates: Partial<Pick<User, 'name' | 'image' | 'password_hash' | 'google_id' | 'apple_id' | 'retell_api_key' | 'retell_webhook_key' | 'retell_webhook_token' | 'retell_agent_id' | 'stripe_customer_id' | 'stripe_default_payment_method_id' | 'auto_payg_enabled'>>
 ): Promise<DbResult<User>> {
   try {
     const now = new Date().toISOString();
@@ -212,6 +222,9 @@ export async function updateUser(
     const hasRetellWebhookKey = Object.prototype.hasOwnProperty.call(updates, 'retell_webhook_key');
     const hasRetellWebhookToken = Object.prototype.hasOwnProperty.call(updates, 'retell_webhook_token');
     const hasRetellAgentId = Object.prototype.hasOwnProperty.call(updates, 'retell_agent_id');
+    const hasStripeCustomerId = Object.prototype.hasOwnProperty.call(updates, 'stripe_customer_id');
+    const hasStripeDefaultPaymentMethodId = Object.prototype.hasOwnProperty.call(updates, 'stripe_default_payment_method_id');
+    const hasAutoPaygEnabled = Object.prototype.hasOwnProperty.call(updates, 'auto_payg_enabled');
 
     const { rows } = await sql<User>`
       UPDATE users SET
@@ -224,6 +237,9 @@ export async function updateUser(
         retell_webhook_key = CASE WHEN ${hasRetellWebhookKey} THEN ${updates.retell_webhook_key ?? null} ELSE retell_webhook_key END,
         retell_webhook_token = CASE WHEN ${hasRetellWebhookToken} THEN ${updates.retell_webhook_token ?? null} ELSE retell_webhook_token END,
         retell_agent_id = CASE WHEN ${hasRetellAgentId} THEN ${updates.retell_agent_id ?? null} ELSE retell_agent_id END,
+        stripe_customer_id = CASE WHEN ${hasStripeCustomerId} THEN ${updates.stripe_customer_id ?? null} ELSE stripe_customer_id END,
+        stripe_default_payment_method_id = CASE WHEN ${hasStripeDefaultPaymentMethodId} THEN ${updates.stripe_default_payment_method_id ?? null} ELSE stripe_default_payment_method_id END,
+        auto_payg_enabled = CASE WHEN ${hasAutoPaygEnabled} THEN ${updates.auto_payg_enabled ?? false} ELSE auto_payg_enabled END,
         updated_at = ${now}
       WHERE id = ${id}
       RETURNING *
@@ -657,6 +673,20 @@ export async function getActiveSubscription(userId: string): Promise<Subscriptio
   }
 }
 
+export async function getQueuedSubscription(userId: string): Promise<Subscription | null> {
+  try {
+    const { rows } = await sql<Subscription>`
+      SELECT * FROM subscriptions
+      WHERE user_id = ${userId} AND status = 'queued'
+      ORDER BY created_at ASC LIMIT 1
+    `;
+    return rows[0] || null;
+  } catch (error) {
+    console.error('getQueuedSubscription error:', error);
+    return null;
+  }
+}
+
 export async function createSubscription(data: {
   id: string;
   user_id: string;
@@ -666,19 +696,29 @@ export async function createSubscription(data: {
   payg_rate_pence?: number | null;
   start_date: string;
   end_date: string;
-  status?: 'active' | 'pay_as_you_go';
+  status?: 'active' | 'pay_as_you_go' | 'queued';
+  replaceCurrent?: boolean;
+  payg_billed_until?: string | null;
 }): Promise<DbResult<Subscription>> {
   try {
     const now = new Date().toISOString();
     const paygRatePence = data.payg_rate_pence ?? PAYG_RATE_PENCE;
     const nextStatus = data.status || 'active';
+    const shouldReplaceCurrent = data.replaceCurrent ?? nextStatus !== 'queued';
 
-    // Invalidate previous active or PAYG subscriptions for the user
-    await sql`
-      UPDATE subscriptions
-      SET status = 'expired'
-      WHERE user_id = ${data.user_id} AND status IN ('active', 'pay_as_you_go')
-    `;
+    if (shouldReplaceCurrent) {
+      await sql`
+        UPDATE subscriptions
+        SET status = 'expired'
+        WHERE user_id = ${data.user_id} AND status IN ('active', 'pay_as_you_go')
+      `;
+    } else if (nextStatus === 'queued') {
+      await sql`
+        UPDATE subscriptions
+        SET status = 'expired'
+        WHERE user_id = ${data.user_id} AND status = 'queued'
+      `;
+    }
 
     const { rows } = await sql<Subscription>`
       INSERT INTO subscriptions (
@@ -691,6 +731,7 @@ export async function createSubscription(data: {
         start_date,
         end_date,
         status,
+        payg_billed_until,
         created_at
       )
       VALUES (
@@ -703,6 +744,7 @@ export async function createSubscription(data: {
         ${data.start_date},
         ${data.end_date},
         ${nextStatus},
+        ${data.payg_billed_until ?? null},
         ${now}
       )
       RETURNING *

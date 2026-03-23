@@ -18,7 +18,7 @@ import { sql } from '@vercel/postgres';
 
 export const runtime = 'nodejs';
 
-type AdminAction = 'add_minutes' | 'assign_package' | 'create_customer' | 'cancel_package' | 'delete_customer';
+type AdminAction = 'add_minutes' | 'assign_package' | 'queue_package' | 'create_customer' | 'cancel_package' | 'delete_customer';
 type PackageMode = 'preset' | 'custom';
 
 interface AdminPackageInput {
@@ -222,6 +222,11 @@ export async function GET() {
         s.status as sub_status,
         s.start_date,
         s.alert_sent_at,
+        q.id as queued_subscription_id,
+        q.plan_name as queued_plan_name,
+        q.total_minutes as queued_total_minutes,
+        q.rate_pence as queued_rate_pence,
+        q.created_at as queued_created_at,
         COALESCE(
           (
             SELECT ROUND(SUM(c.duration)::numeric / 60000, 3)
@@ -240,6 +245,12 @@ export async function GET() {
           AND status IN ('active', 'pay_as_you_go')
         ORDER BY created_at DESC LIMIT 1
       ) s ON true
+      LEFT JOIN LATERAL (
+        SELECT * FROM subscriptions
+        WHERE user_id = u.id
+          AND status = 'queued'
+        ORDER BY created_at ASC LIMIT 1
+      ) q ON true
       ORDER BY u.created_at DESC
     `;
 
@@ -261,6 +272,13 @@ export async function GET() {
         percent_used: Number(row.total_minutes || 0) > 0
           ? Math.min(100, Math.round((Number(row.used_minutes || 0) / Number(row.total_minutes || 0)) * 100))
           : 0,
+      } : null,
+      next_subscription: row.queued_subscription_id ? {
+        id: row.queued_subscription_id,
+        plan_name: row.queued_plan_name,
+        total_minutes: Number(row.queued_total_minutes || 0),
+        rate_pence: Number(row.queued_rate_pence || 0),
+        created_at: row.queued_created_at,
       } : null,
       total_calls: row.total_calls,
     }));
@@ -371,6 +389,51 @@ export async function POST(req: Request) {
         success: true,
         message: `${user.name} icin paket atandi.`,
         data: { packageSummary: result.packageSummary },
+      });
+    }
+
+    if (action === 'queue_package') {
+      const userId = typeof body.userId === 'string' ? body.userId : '';
+      if (!userId) {
+        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+      }
+
+      const user = await getUserById(userId);
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      const parsed = parsePackageConfig(body.packageConfig);
+      if (!parsed.data) {
+        return NextResponse.json({ error: parsed.error }, { status: 400 });
+      }
+
+      if (parsed.data.status === 'pay_as_you_go') {
+        return NextResponse.json({ error: 'PAYG siradaki paket olarak kuyruga alinmaz. Istersen direkt aktif atayabilirsin.' }, { status: 400 });
+      }
+
+      const queuedResult = await createSubscription({
+        id: `sub_queue_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        user_id: userId,
+        plan_name: parsed.data.planName,
+        total_minutes: parsed.data.totalMinutes,
+        rate_pence: parsed.data.ratePence,
+        payg_rate_pence: parsed.data.paygRatePence,
+        start_date: makeFarFutureIsoDate(),
+        end_date: makeFarFutureIsoDate(),
+        status: 'queued',
+        replaceCurrent: false,
+      });
+
+      if (!queuedResult.success) {
+        return NextResponse.json({ error: queuedResult.error || 'Failed to queue package' }, { status: 400 });
+      }
+
+      await recordBillingEvent(userId, 'admin_next_package_queued', `Admin tarafindan siradaki paket tanimlandi: ${parsed.data.summary}`);
+      return NextResponse.json({
+        success: true,
+        message: `${user.name} icin siradaki paket kaydedildi.`,
+        data: { packageSummary: parsed.data.summary },
       });
     }
 

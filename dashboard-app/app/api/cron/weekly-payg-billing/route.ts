@@ -1,14 +1,34 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
+import Stripe from 'stripe';
 
 export const runtime = 'nodejs';
 
-/**
- * GET /api/cron/weekly-payg-billing
- *
- * Runs every Sunday and records weekly PAYG invoices.
- * The actual Stripe invoice creation is still a TODO.
- */
+let stripeClient: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (!stripeClient) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error('STRIPE_SECRET_KEY is not set');
+    stripeClient = new Stripe(key);
+  }
+  return stripeClient;
+}
+
+type PaygUserRow = {
+  id: string;
+  user_id: string;
+  payg_rate_pence: number | null;
+  rate_pence: number | null;
+  start_date: string;
+  payg_billed_until: string | null;
+  email: string;
+  name: string;
+  stripe_customer_id: string | null;
+  stripe_default_payment_method_id: string | null;
+  auto_payg_enabled: boolean;
+};
+
 export async function GET(req: Request) {
   const authHeader = req.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
@@ -19,12 +39,16 @@ export async function GET(req: Request) {
 
   try {
     const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const weekAgoISO = weekAgo.toISOString();
     const nowISO = now.toISOString();
 
-    const { rows: paygUsers } = await sql`
-      SELECT s.*, u.email, u.name
+    const { rows: paygUsers } = await sql<PaygUserRow>`
+      SELECT
+        s.*,
+        u.email,
+        u.name,
+        u.stripe_customer_id,
+        u.stripe_default_payment_method_id,
+        u.auto_payg_enabled
       FROM subscriptions s
       JOIN users u ON s.user_id = u.id
       WHERE s.status = 'pay_as_you_go'
@@ -33,13 +57,15 @@ export async function GET(req: Request) {
     const results = [];
 
     for (const sub of paygUsers) {
+      const chargeFrom = sub.payg_billed_until || sub.start_date;
+
       const { rows: usageRows } = await sql<{ total_ms: number; call_count: number }>`
         SELECT
           COALESCE(SUM(duration), 0)::bigint as total_ms,
           COUNT(*)::int as call_count
         FROM calls
         WHERE user_id = ${sub.user_id}
-          AND call_date >= ${weekAgoISO}
+          AND call_date > ${chargeFrom}
           AND call_date <= ${nowISO}
       `;
 
@@ -56,34 +82,111 @@ export async function GET(req: Request) {
       const totalPence = Math.round(totalMinutes * ratePence);
       const totalPounds = (totalPence / 100).toFixed(2);
 
+      const canAutoCharge = !!(
+        sub.auto_payg_enabled &&
+        sub.stripe_customer_id &&
+        sub.stripe_default_payment_method_id
+      );
+
+      if (canAutoCharge) {
+        try {
+          const paymentIntent = await getStripe().paymentIntents.create({
+            amount: totalPence,
+            currency: 'gbp',
+            customer: sub.stripe_customer_id!,
+            payment_method: sub.stripe_default_payment_method_id!,
+            confirm: true,
+            off_session: true,
+            description: `Weekly PAYG usage for ${sub.email}: ${totalMinutes.toFixed(2)} dk`,
+            metadata: {
+              userId: sub.user_id,
+              periodStart: chargeFrom,
+              periodEnd: nowISO,
+              type: 'weekly_payg',
+            },
+          });
+
+          await sql`
+            INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
+            VALUES (
+              ${'be_payg_charge_' + sub.user_id + '_' + Date.now()},
+              ${sub.user_id},
+              'payg_weekly_charge_succeeded',
+              ${totalPence},
+              ${`Haftalik PAYG otomatik tahsilat basarili: ${totalMinutes.toFixed(2)} dk x ${ratePence}p = GBP ${totalPounds} (${callCount} arama). PaymentIntent: ${paymentIntent.id}`},
+              ${nowISO}
+            )
+          `;
+
+          await sql`
+            UPDATE subscriptions
+            SET payg_billed_until = ${nowISO}
+            WHERE id = ${sub.id}
+          `;
+
+          results.push({
+            user: sub.email,
+            status: 'charged',
+            minutes: totalMinutes,
+            amount_pence: totalPence,
+            calls: callCount,
+          });
+          continue;
+        } catch (error: any) {
+          await sql`
+            INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
+            VALUES (
+              ${'be_payg_charge_failed_' + sub.user_id + '_' + Date.now()},
+              ${sub.user_id},
+              'payg_weekly_charge_failed',
+              ${totalPence},
+              ${`Haftalik PAYG tahsilati basarisiz: ${totalMinutes.toFixed(2)} dk x ${ratePence}p = GBP ${totalPounds}. Hata: ${error.message || 'Unknown error'}`},
+              ${nowISO}
+            )
+          `;
+
+          results.push({
+            user: sub.email,
+            status: 'charge_failed',
+            amount_pence: totalPence,
+            calls: callCount,
+          });
+          continue;
+        }
+      }
+
       await sql`
         INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
         VALUES (
-          ${'be_payg_' + sub.user_id + '_' + Date.now()},
+          ${'be_payg_invoice_' + sub.user_id + '_' + Date.now()},
           ${sub.user_id},
           'payg_weekly_invoice',
           ${totalPence},
-          ${`Haftalik PAYG faturasi: ${totalMinutes.toFixed(2)} dk x ${ratePence}p = GBP ${totalPounds} (${callCount} arama)`},
+          ${`Haftalik PAYG manuel fatura: ${totalMinutes.toFixed(2)} dk x ${ratePence}p = GBP ${totalPounds} (${callCount} arama)`},
           ${nowISO}
         )
       `;
 
+      await sql`
+        UPDATE subscriptions
+        SET payg_billed_until = ${nowISO}
+        WHERE id = ${sub.id}
+      `;
+
       results.push({
         user: sub.email,
-        status: 'invoiced',
+        status: 'manual_invoice',
         minutes: totalMinutes,
         amount_pence: totalPence,
         calls: callCount,
       });
-
-      console.log(`PAYG weekly invoice for ${sub.email}: GBP ${totalPounds} (${totalMinutes.toFixed(2)} dk, ${callCount} arama)`);
     }
 
     return NextResponse.json({
       success: true,
       processed: results.length,
       results,
-      period: { from: weekAgoISO, to: nowISO },
+      periodEnd: nowISO,
     });
   } catch (error: any) {
     console.error('Weekly PAYG billing error:', error);

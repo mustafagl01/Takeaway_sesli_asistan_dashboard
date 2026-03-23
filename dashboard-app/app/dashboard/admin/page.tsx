@@ -28,6 +28,13 @@ interface CustomerData {
     start_date: string;
     percent_used: number;
   } | null;
+  next_subscription: {
+    id: string;
+    plan_name: string;
+    total_minutes: number;
+    rate_pence: number;
+    created_at: string;
+  } | null;
   total_calls: number;
 }
 
@@ -296,6 +303,8 @@ export default function AdminPage() {
 
   const [assignPackageModal, setAssignPackageModal] = useState<{ userId: string; name: string } | null>(null);
   const [assignPackageForm, setAssignPackageForm] = useState<PackageFormState>(defaultPackageFormState());
+  const [queuePackageModal, setQueuePackageModal] = useState<{ userId: string; name: string } | null>(null);
+  const [queuePackageForm, setQueuePackageForm] = useState<PackageFormState>(defaultPackageFormState());
 
   const [credentialResult, setCredentialResult] = useState<CreateCustomerResult | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -411,6 +420,36 @@ export default function AdminPage() {
 
       setAssignPackageModal(null);
       setAssignPackageForm(defaultPackageFormState());
+      await fetchCustomers();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Sunucu hatasi');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleQueuePackage() {
+    if (!queuePackageModal) return;
+    setActionLoading(true);
+
+    try {
+      const res = await fetch('/api/admin/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'queue_package',
+          userId: queuePackageModal.userId,
+          packageConfig: buildPackageRequest(queuePackageForm),
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Siradaki paket kaydedilemedi');
+      }
+
+      setQueuePackageModal(null);
+      setQueuePackageForm(defaultPackageFormState());
       await fetchCustomers();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Sunucu hatasi');
@@ -725,9 +764,21 @@ export default function AdminPage() {
                                   PAYG fallback: {customer.subscription.payg_rate_pence}p/dk
                                 </div>
                               ) : null}
+                              {customer.next_subscription ? (
+                                <div className="text-xs text-indigo-600 dark:text-indigo-300 pt-1">
+                                  Siradaki paket: {customer.next_subscription.plan_name} | {customer.next_subscription.total_minutes} dk | {customer.next_subscription.rate_pence}p/dk
+                                </div>
+                              ) : null}
                             </div>
                           ) : (
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Paket yok</span>
+                            <div className="space-y-1">
+                              <span className="text-sm text-gray-500 dark:text-gray-400">Paket yok</span>
+                              {customer.next_subscription ? (
+                                <div className="text-xs text-indigo-600 dark:text-indigo-300">
+                                  Siradaki paket: {customer.next_subscription.plan_name} | {customer.next_subscription.total_minutes} dk | {customer.next_subscription.rate_pence}p/dk
+                                </div>
+                              ) : null}
+                            </div>
                           )}
                         </td>
                         <td className="px-6 py-5">
@@ -773,6 +824,17 @@ export default function AdminPage() {
                               className="px-4 py-2 rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-950/60 transition-colors text-sm font-medium"
                             >
                               Paket Ata
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQueuePackageModal({ userId: customer.id, name: customer.name });
+                                setQueuePackageForm(defaultPackageFormState());
+                              }}
+                              disabled={actionLoading}
+                              className="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-950/60 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Sonraki Paket
                             </button>
                             <button
                               type="button"
@@ -931,6 +993,48 @@ export default function AdminPage() {
                 className="px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold disabled:opacity-60"
               >
                 {actionLoading ? 'Tanimlaniyor...' : 'Paketi Kaydet'}
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      ) : null}
+
+      {queuePackageModal ? (
+        <ModalShell
+          title="Sonraki Paketi Kuyruga Al"
+          subtitle={`${queuePackageModal.name} icin sonraki paketi hazirla. Aktif paket bitince otomatik devreye girer.`}
+          onClose={() => {
+            if (actionLoading) return;
+            setQueuePackageModal(null);
+          }}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleQueuePackage();
+            }}
+            className="space-y-5"
+          >
+            <PackageFields value={queuePackageForm} onChange={setQueuePackageForm} />
+
+            <div className="rounded-xl border border-sky-200 dark:border-sky-700 bg-sky-50/80 dark:bg-sky-950/30 p-4 text-sm text-sky-700 dark:text-sky-300">
+              Bu paket hemen aktif olmaz. Mevcut paket bittiginde otomatik olarak devreye girer.
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setQueuePackageModal(null)}
+                className="px-5 py-3 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200"
+              >
+                Vazgec
+              </button>
+              <button
+                type="submit"
+                disabled={actionLoading}
+                className="px-5 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-500 text-white font-semibold disabled:opacity-60"
+              >
+                {actionLoading ? 'Kaydediliyor...' : 'Siraya Al'}
               </button>
             </div>
           </form>

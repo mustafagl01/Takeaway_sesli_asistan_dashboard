@@ -1,8 +1,13 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createSubscription } from '@/lib/db';
+import { createSubscription, getActiveSubscription, updateUser } from '@/lib/db';
 import { sql } from '@vercel/postgres';
-import { buildPresetPlanName, calculatePackageRatePence, derivePaygRatePence, getBillingTierName } from '@/lib/pricing';
+import {
+  buildPresetPlanName,
+  calculatePackageRatePence,
+  derivePaygRatePence,
+  getBillingTierName,
+} from '@/lib/pricing';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +21,26 @@ function getStripe(): Stripe {
   }
 
   return stripeClient;
+}
+
+async function getPaymentMethodId(session: Stripe.Checkout.Session): Promise<string | null> {
+  const paymentIntentId =
+    typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+
+  if (!paymentIntentId) {
+    return null;
+  }
+
+  try {
+    const paymentIntent = await getStripe().paymentIntents.retrieve(paymentIntentId);
+    if (typeof paymentIntent.payment_method === 'string') {
+      return paymentIntent.payment_method;
+    }
+    return paymentIntent.payment_method?.id || null;
+  } catch (error) {
+    console.warn('Failed to retrieve Stripe payment method:', error);
+    return null;
+  }
 }
 
 export async function POST(req: Request) {
@@ -41,6 +66,7 @@ export async function POST(req: Request) {
     if (metadata?.type === 'prepaid_minutes' && metadata.userId && metadata.minutes) {
       const minutes = Number.parseInt(metadata.minutes, 10);
       const tier = (metadata.tier as 'Small' | 'Medium' | 'Pro' | undefined) || getBillingTierName(minutes);
+      const activationMode = metadata.activationMode === 'queued' ? 'queued' : 'immediate';
       const ratePence = calculatePackageRatePence(minutes);
       const paygRatePence = derivePaygRatePence(ratePence);
       const now = new Date().toISOString();
@@ -63,6 +89,20 @@ export async function POST(req: Request) {
           return NextResponse.json({ received: true, duplicate: true });
         }
 
+        const stripeCustomerId =
+          typeof session.customer === 'string' ? session.customer : session.customer?.id || null;
+        const stripePaymentMethodId = await getPaymentMethodId(session);
+
+        await updateUser(metadata.userId, {
+          stripe_customer_id: stripeCustomerId,
+          stripe_default_payment_method_id: stripePaymentMethodId,
+          auto_payg_enabled: !!stripeCustomerId && !!stripePaymentMethodId,
+        });
+
+        const currentSubscription = await getActiveSubscription(metadata.userId);
+        const shouldQueue =
+          activationMode === 'queued' && currentSubscription?.status === 'active';
+
         const createResult = await createSubscription({
           id: subscriptionId,
           user_id: metadata.userId,
@@ -70,8 +110,10 @@ export async function POST(req: Request) {
           total_minutes: minutes,
           rate_pence: ratePence,
           payg_rate_pence: paygRatePence,
-          start_date: now,
+          start_date: shouldQueue ? endDate.toISOString() : now,
           end_date: endDate.toISOString(),
+          status: shouldQueue ? 'queued' : 'active',
+          replaceCurrent: !shouldQueue,
         });
 
         if (!createResult.success) {
@@ -83,15 +125,21 @@ export async function POST(req: Request) {
           VALUES (
             ${billingEventId},
             ${metadata.userId},
-            'package_purchased',
+            ${shouldQueue ? 'next_package_purchased' : 'package_purchased'},
             ${session.amount_total || 0},
-            ${`${minutes} dakika ${tier} paket satin alindi. PAYG fallback: ${paygRatePence}p/dk.`},
+            ${
+              shouldQueue
+                ? `${minutes} dakika ${tier} paket satin alindi ve siradaki paket olarak kuyruga alindi. Paket biterse kart kayitliysa otomatik 20p/dk PAYG acilabilir.`
+                : `${minutes} dakika ${tier} paket satin alindi. Paket biterse kart kayitliysa otomatik 20p/dk PAYG acilabilir.`
+            },
             ${now}
           )
           ON CONFLICT (id) DO NOTHING
         `;
 
-        console.log(`Subscription created for user ${metadata.userId}: ${minutes} minutes`);
+        console.log(
+          `Subscription created for user ${metadata.userId}: ${minutes} minutes (${shouldQueue ? 'queued' : 'active'})`
+        );
       } catch (error) {
         console.error('Failed to create subscription after payment:', error);
         return NextResponse.json({ error: 'Failed to process checkout session' }, { status: 500 });
