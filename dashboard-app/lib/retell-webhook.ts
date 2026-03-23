@@ -78,7 +78,7 @@ export function buildRetellWebhookUrl(origin: string, webhookToken: string): str
 }
 
 function isCallEndedEvent(event: string | null | undefined): boolean {
-  return event === 'call_ended' || event === 'call.ended';
+  return event === 'call_ended' || event === 'call.ended' || event === 'call_analyzed' || event === 'call.analyzed';
 }
 
 function parseNumber(value: unknown): number | null {
@@ -390,9 +390,9 @@ export async function handleRetellWebhook(
     ON CONFLICT (id) DO UPDATE SET
       duration = EXCLUDED.duration,
       status = EXCLUDED.status,
-      outcome = EXCLUDED.outcome,
-      transcript = EXCLUDED.transcript,
-      recording_url = EXCLUDED.recording_url,
+      outcome = COALESCE(EXCLUDED.outcome, calls.outcome),
+      transcript = COALESCE(EXCLUDED.transcript, calls.transcript),
+      recording_url = COALESCE(EXCLUDED.recording_url, calls.recording_url),
       call_cost_cents = COALESCE(EXCLUDED.call_cost_cents, calls.call_cost_cents),
       customer_cost_cents = COALESCE(EXCLUDED.customer_cost_cents, calls.customer_cost_cents)
   `;
