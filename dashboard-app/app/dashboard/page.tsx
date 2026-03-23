@@ -15,6 +15,7 @@ import { cookies } from 'next/headers';
 import { getCallMetrics, getRecentCalls, getBusinessesForUser, type Call } from '@/lib/db';
 import ActiveSubscriptionWidget from '@/components/ActiveSubscriptionWidget';
 import { sql } from '@vercel/postgres';
+import { formatDurationFromMilliseconds } from '@/lib/duration';
 
 /**
  * Dashboard metrics data
@@ -127,7 +128,7 @@ export default async function DashboardPage() {
 
             <MetricCard
               title="Avg Duration"
-              value={`${Math.round(metrics.avg_duration)}s`}
+              value={formatDurationFromMilliseconds(metrics.avg_duration)}
               subtitle="Per call"
               icon={
                 <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">

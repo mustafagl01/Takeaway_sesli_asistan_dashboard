@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import type { Call } from '@/lib/db'
+import { formatDurationFromMilliseconds } from '@/lib/duration'
 
 // ============================================================================
 // Type Definitions
@@ -480,14 +481,6 @@ function CallRow({ call, index }: CallRowProps) {
 
   const config = statusConfig[call.status] || statusConfig.cancelled
 
-  // Format duration
-  const formatDuration = (seconds: number | null): string => {
-    if (!seconds) return '-'
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
-  }
-
   return (
     <tr className="hover:bg-indigo-500/5 dark:hover:bg-indigo-500/10 transition-colors opacity-0 animate-fade-in" style={{ animationDelay: `${300 + index * 30}ms` }}>
       {/* Date & Time */}
@@ -506,7 +499,7 @@ function CallRow({ call, index }: CallRowProps) {
       {/* Duration */}
       <td className="px-6 py-4 whitespace-nowrap">
         <div className="text-sm text-gray-700 dark:text-gray-300">
-          {formatDuration(call.duration)}
+          {formatDurationFromMilliseconds(call.duration)}
         </div>
       </td>
 

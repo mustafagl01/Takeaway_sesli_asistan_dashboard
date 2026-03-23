@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AnalyticsChart from '@/components/AnalyticsChart'
 import type { Call } from '@/lib/db'
+import { formatDurationFromMilliseconds } from '@/lib/duration'
 
 // ============================================================================
 // Type Definitions
@@ -311,7 +312,7 @@ export default function AnalyticsPage() {
               />
               <MetricCard
                 title="Avg Duration"
-                value={`${metrics.avgDuration}s`}
+                value={formatDurationFromMilliseconds(metrics.avgDurationMs)}
                 icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                 color="violet"
                 delay={200}
@@ -391,14 +392,14 @@ function getLast30DaysDate(): string {
 function calculateAnalyticsMetrics(calls: Call[]) {
   const totalCalls = calls.length
   const completedCalls = calls.filter(c => c.status === 'completed').length
-  const avgDuration = totalCalls > 0
+  const avgDurationMs = totalCalls > 0
     ? calls.reduce((sum, c) => sum + (c.duration || 0), 0) / totalCalls
     : 0
   const completionRate = totalCalls > 0 ? (completedCalls / totalCalls) * 100 : 0
 
   const callsWithCost = calls.filter(c => c.call_cost_cents != null && c.call_cost_cents >= 0)
   const totalCostCents = callsWithCost.reduce((sum, c) => sum + (c.call_cost_cents ?? 0), 0)
-  const totalDurationMinutes = callsWithCost.reduce((sum, c) => sum + (c.duration ?? 0), 0) / 60
+  const totalDurationMinutes = callsWithCost.reduce((sum, c) => sum + (c.duration ?? 0), 0) / 60000
   const costPerMinuteCents = totalDurationMinutes > 0 ? totalCostCents / totalDurationMinutes : 0
 
   const hourCounts: Record<number, number> = {}
@@ -419,7 +420,7 @@ function calculateAnalyticsMetrics(calls: Call[]) {
   return {
     totalCalls,
     completedCalls,
-    avgDuration: Math.round(avgDuration),
+    avgDurationMs: Math.round(avgDurationMs),
     completionRate,
     peakHour,
     peakHourCount,
@@ -496,13 +497,6 @@ function RecentCallsTable({ calls }: { calls: Call[] }) {
     },
   }
 
-  function formatDuration(seconds: number | null): string {
-    if (seconds == null) return '-'
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
-  }
-
   return (
     <div className="glass-card rounded-2xl p-6 mt-8 animate-fade-in-up" style={{ animationDelay: '600ms' }}>
       <div className="flex items-center justify-between mb-6">
@@ -539,7 +533,7 @@ function RecentCallsTable({ calls }: { calls: Call[] }) {
                   <tr key={call.id} className="hover:bg-indigo-500/5 dark:hover:bg-indigo-500/10 transition-colors">
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{dateStr} {timeStr}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{call.phone_number}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{formatDuration(call.duration)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{formatDurationFromMilliseconds(call.duration)}</td>
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{call.call_cost_cents != null ? `$${(call.call_cost_cents / 100).toFixed(2)}` : '-'}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full ${config.bg} ${config.text} border border-current/20`}>

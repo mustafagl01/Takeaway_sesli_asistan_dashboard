@@ -21,6 +21,7 @@ import { redirect, notFound } from 'next/navigation';
 import { getCallById, getUserById, updateCallCost } from '@/lib/db';
 import { getCallDetailsViaApi, type RetellCallDetails } from '@/lib/retell';
 import Link from 'next/link';
+import { formatDurationFromSeconds, millisecondsToSeconds } from '@/lib/duration';
 
 // ============================================================================
 // Type Definitions
@@ -137,11 +138,12 @@ export default async function CallDetailsPage({
   }
 
   // Merge data: use Retell when available, otherwise cached. Recording from API or cache so user can always listen if we have it.
+  const cachedDurationSeconds = millisecondsToSeconds(cachedCall.duration);
   const callMetadata: CallMetadata = {
     id: callId,
     phone_number: retellCallDetails?.phone_number || cachedCall.phone_number || 'Unknown',
     call_date: retellCallDetails?.start_time || cachedCall.call_date || new Date().toISOString(),
-    duration: retellCallDetails?.duration ?? cachedCall.duration ?? null,
+    duration: retellCallDetails?.duration ?? cachedDurationSeconds,
     status: retellCallDetails?.status || cachedCall.status || 'unknown',
     outcome: retellCallDetails?.outcome ?? cachedCall.outcome ?? null,
     recording_url: retellCallDetails?.recording_url || cachedCall.recording_url || null,
@@ -528,9 +530,7 @@ function formatDateTime(dateString: string): string {
  * @returns Formatted duration (e.g., "5m 30s")
  */
 function formatDuration(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}m ${remainingSeconds}s`;
+  return formatDurationFromSeconds(seconds);
 }
 
 /**
