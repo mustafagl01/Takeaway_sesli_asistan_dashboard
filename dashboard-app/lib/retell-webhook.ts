@@ -330,7 +330,20 @@ export async function handleRetellWebhook(
   const signature = req.headers.get('x-retell-signature');
   const trustedForward = isTrustedForwardRequest(req);
   if (!trustedForward && !verifyRetellSignature(bodyText, signature, webhookUser.retell_webhook_key)) {
-    console.warn(`Retell webhook: invalid signature for user ${webhookUser.id}`);
+    // Diagnostic logging — remove after debugging
+    const sigPreview = signature ? signature.substring(0, 30) + '...' : 'NULL';
+    const keyPresent = !!webhookUser.retell_webhook_key;
+    const keyPreview = webhookUser.retell_webhook_key ? webhookUser.retell_webhook_key.substring(0, 8) + '...' : 'NULL';
+    const bodyLen = bodyText.length;
+    const retellMatch = signature?.trim().match(/^v=(\d+),d=([a-f0-9]+)$/i);
+    const matchedFormat = retellMatch ? 'v=ts,d=hmac' : 'other';
+
+    // Try with API key as fallback to diagnose key mismatch
+    const apiKeyWorks = webhookUser.retell_api_key
+      ? verifyRetellSignature(bodyText, signature, webhookUser.retell_api_key)
+      : false;
+
+    console.warn(`Retell webhook SIG FAIL: user=${webhookUser.id} sig=${sigPreview} keyPresent=${keyPresent} keyPreview=${keyPreview} bodyLen=${bodyLen} format=${matchedFormat} apiKeyWorks=${apiKeyWorks} call_id=${call.call_id}`);
     return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
   }
 
