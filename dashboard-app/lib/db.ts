@@ -16,6 +16,7 @@ export interface User {
   email: string;
   password_hash: string | null;
   name: string;
+  phone: string | null;
   image: string | null;
   google_id: string | null;
   apple_id: string | null;
@@ -84,6 +85,8 @@ export interface Subscription {
   rate_pence: number;
   payg_rate_pence?: number | null;
   alert_sent_at?: string | null;
+  alert_20_sent_at?: string | null;
+  alert_10_sent_at?: string | null;
   payg_billed_until?: string | null;
   start_date: string;
   end_date: string;
@@ -155,6 +158,7 @@ export async function createUser(userData: {
   email: string;
   password_hash?: string | null;
   name: string;
+  phone?: string | null;
   image?: string | null;
   google_id?: string | null;
   apple_id?: string | null;
@@ -168,6 +172,7 @@ export async function createUser(userData: {
         email,
         password_hash,
         name,
+        phone,
         image,
         google_id,
         apple_id,
@@ -186,6 +191,7 @@ export async function createUser(userData: {
         ${userData.email},
         ${userData.password_hash || null},
         ${userData.name},
+        ${userData.phone || null},
         ${userData.image || null},
         ${userData.google_id || null},
         ${userData.apple_id || null},
@@ -209,11 +215,12 @@ export async function createUser(userData: {
 
 export async function updateUser(
   id: string,
-  updates: Partial<Pick<User, 'name' | 'image' | 'password_hash' | 'google_id' | 'apple_id' | 'retell_api_key' | 'retell_webhook_key' | 'retell_webhook_token' | 'retell_agent_id' | 'stripe_customer_id' | 'stripe_default_payment_method_id' | 'auto_payg_enabled'>>
+  updates: Partial<Pick<User, 'name' | 'phone' | 'image' | 'password_hash' | 'google_id' | 'apple_id' | 'retell_api_key' | 'retell_webhook_key' | 'retell_webhook_token' | 'retell_agent_id' | 'stripe_customer_id' | 'stripe_default_payment_method_id' | 'auto_payg_enabled'>>
 ): Promise<DbResult<User>> {
   try {
     const now = new Date().toISOString();
     const hasName = Object.prototype.hasOwnProperty.call(updates, 'name');
+    const hasPhone = Object.prototype.hasOwnProperty.call(updates, 'phone');
     const hasImage = Object.prototype.hasOwnProperty.call(updates, 'image');
     const hasPasswordHash = Object.prototype.hasOwnProperty.call(updates, 'password_hash');
     const hasGoogleId = Object.prototype.hasOwnProperty.call(updates, 'google_id');
@@ -229,6 +236,7 @@ export async function updateUser(
     const { rows } = await sql<User>`
       UPDATE users SET
         name = CASE WHEN ${hasName} THEN ${updates.name ?? null} ELSE name END,
+        phone = CASE WHEN ${hasPhone} THEN ${updates.phone ?? null} ELSE phone END,
         image = CASE WHEN ${hasImage} THEN ${updates.image ?? null} ELSE image END,
         password_hash = CASE WHEN ${hasPasswordHash} THEN ${updates.password_hash ?? null} ELSE password_hash END,
         google_id = CASE WHEN ${hasGoogleId} THEN ${updates.google_id ?? null} ELSE google_id END,

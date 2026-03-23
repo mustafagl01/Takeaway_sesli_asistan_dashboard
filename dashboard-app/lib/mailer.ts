@@ -13,6 +13,14 @@ export interface MailDeliveryResult {
   error?: string;
 }
 
+interface UsageAlertEmailInput {
+  email: string;
+  name: string;
+  subject: string;
+  message: string;
+  dashboardUrl: string;
+}
+
 function getSmtpConfig() {
   const host = process.env.SMTP_HOST?.trim();
   const portRaw = process.env.SMTP_PORT?.trim();
@@ -46,26 +54,36 @@ function getSmtpConfig() {
   };
 }
 
-export async function sendCustomerInviteEmail(input: CustomerInviteEmailInput): Promise<MailDeliveryResult> {
+async function createTransporter() {
   const smtpConfig = getSmtpConfig();
   if (!smtpConfig) {
-    return { sent: false, error: 'SMTP configuration is missing' };
+    return null;
   }
 
-  try {
-    const transporter = nodemailer.createTransport({
+  return {
+    transporter: nodemailer.createTransport({
       host: smtpConfig.host,
       port: smtpConfig.port,
       secure: smtpConfig.secure,
       auth: smtpConfig.auth,
-    });
+    }),
+    from: smtpConfig.from,
+  };
+}
 
+export async function sendCustomerInviteEmail(input: CustomerInviteEmailInput): Promise<MailDeliveryResult> {
+  const transport = await createTransporter();
+  if (!transport) {
+    return { sent: false, error: 'SMTP configuration is missing' };
+  }
+
+  try {
     const packageLine = input.packageSummary
       ? `<p style="margin:0 0 16px;">Tanimlanan paket: <strong>${input.packageSummary}</strong></p>`
       : '';
 
-    await transporter.sendMail({
-      from: smtpConfig.from,
+    await transport.transporter.sendMail({
+      from: transport.from,
       to: input.email,
       subject: 'UK Takeaway Dashboard giris bilgileriniz',
       text: [
@@ -90,6 +108,42 @@ export async function sendCustomerInviteEmail(input: CustomerInviteEmailInput): 
             <p style="margin:0;"><strong>Sifre:</strong> ${input.password}</p>
           </div>
           <p style="margin:0;">Isterseniz giris yaptiktan sonra profil sayfasindan sifrenizi degistirebilirsiniz.</p>
+        </div>
+      `,
+    });
+
+    return { sent: true };
+  } catch (error) {
+    return {
+      sent: false,
+      error: error instanceof Error ? error.message : 'Unknown SMTP error',
+    };
+  }
+}
+
+export async function sendUsageAlertEmail(input: UsageAlertEmailInput): Promise<MailDeliveryResult> {
+  const transport = await createTransporter();
+  if (!transport) {
+    return { sent: false, error: 'SMTP configuration is missing' };
+  }
+
+  try {
+    await transport.transporter.sendMail({
+      from: transport.from,
+      to: input.email,
+      subject: input.subject,
+      text: [
+        `Merhaba ${input.name},`,
+        '',
+        input.message,
+        '',
+        `Dashboard: ${input.dashboardUrl}`,
+      ].join('\n'),
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
+          <p style="margin:0 0 16px;">Merhaba ${input.name},</p>
+          <p style="margin:0 0 16px;">${input.message}</p>
+          <p style="margin:0;">Dashboard: <a href="${input.dashboardUrl}">${input.dashboardUrl}</a></p>
         </div>
       `,
     });

@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT,
   name TEXT NOT NULL,
+  phone TEXT,
   image TEXT,
   google_id TEXT UNIQUE,
   apple_id TEXT UNIQUE,
@@ -56,6 +57,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   end_date TEXT NOT NULL,
   status TEXT NOT NULL,
   alert_sent_at TEXT,
+  alert_20_sent_at TEXT,
+  alert_10_sent_at TEXT,
   payg_billed_until TEXT,
   created_at TEXT NOT NULL
 );

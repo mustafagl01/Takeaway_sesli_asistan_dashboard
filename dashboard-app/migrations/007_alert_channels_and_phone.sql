@@ -1,0 +1,8 @@
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS phone TEXT;
+
+ALTER TABLE subscriptions
+ADD COLUMN IF NOT EXISTS alert_20_sent_at TEXT;
+
+ALTER TABLE subscriptions
+ADD COLUMN IF NOT EXISTS alert_10_sent_at TEXT;

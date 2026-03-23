@@ -4,6 +4,8 @@ import { sql } from '@vercel/postgres';
 import { getCallDetailsViaApi } from '@/lib/retell';
 import { createSubscription } from '@/lib/db';
 import { PAYG_RATE_PENCE } from './pricing';
+import { sendUsageAlertEmail } from './mailer';
+import { sendUsageAlertSms } from './sms';
 
 type RetellCallCostPayload = {
   combined_cost?: number | string | null;
@@ -61,6 +63,8 @@ type RetellSubscriptionRow = {
   payg_rate_pence: number | null;
   start_date: string;
   alert_sent_at: string | null;
+  alert_20_sent_at: string | null;
+  alert_10_sent_at: string | null;
   payg_billed_until: string | null;
 };
 
@@ -236,28 +240,37 @@ async function sendAlert(userId: string, message: string) {
     `;
 
     console.log(`Alert for user ${userId} (${user.email}): ${message}`);
+    const dashboardUrl = 'https://www.mglsystems.uk/dashboard/billing';
+    const emailResult = user.email
+      ? await sendUsageAlertEmail({
+          email: user.email,
+          name: user.name || user.email,
+          subject: 'UK Takeaway Dashboard dakika uyarisi',
+          message,
+          dashboardUrl,
+        })
+      : { sent: false, error: 'User email is missing' };
 
-    // Trigger n8n webhook for SMS/External notification
-    const n8nWebhookUrl = process.env.N8N_ALERT_WEBHOOK_URL;
-    if (n8nWebhookUrl) {
-      try {
-        await fetch(n8nWebhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId,
-            email: user.email,
-            name: user.name,
-            phone: user.phone || '', // Include phone number for Twilio
-            message,
-            timestamp: new Date().toISOString()
-          })
-        });
-        console.log('Usage alert triggered to n8n successfully');
-      } catch (n8nErr) {
-        console.error('Failed to trigger n8n alert:', n8nErr);
-      }
-    }
+    const smsResult = user.phone
+      ? await sendUsageAlertSms({
+          to: user.phone,
+          message,
+        })
+      : { sent: false, error: 'User phone is missing' };
+
+    console.log(`Alert delivery for user ${userId}: emailSent=${emailResult.sent} smsSent=${smsResult.sent}`);
+
+    await sql`
+      INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
+      VALUES (
+        ${'be_alert_delivery_' + Date.now()},
+        ${userId},
+        'alert_delivery',
+        ${0},
+        ${`Alert delivery email=${emailResult.sent ? 'sent' : `failed:${emailResult.error || 'unknown'}`} sms=${smsResult.sent ? 'sent' : `failed:${smsResult.error || 'unknown'}`}`},
+        ${new Date().toISOString()}
+      )
+    `;
   } catch (err) {
     console.error('Failed to send alert:', err);
   }
@@ -440,11 +453,6 @@ export async function handleRetellWebhook(
     const remainingMinutes = parseFloat(Math.max(0, totalMinutes - totalUsedMinutes).toFixed(3));
     const percentRemaining = totalMinutes > 0 ? (remainingMinutes / totalMinutes) * 100 : 0;
 
-    const lastAlertAt = subscription.alert_sent_at;
-    const alertCooldownHours = 12;
-    const canSendAlert = !lastAlertAt
-      || (Date.now() - new Date(lastAlertAt).getTime()) > alertCooldownHours * 60 * 60 * 1000;
-
     if (remainingMinutes <= 0) {
       const queuedSubscription = await getQueuedSubscription(webhookUser.id);
       const hasCardOnFile = !!(
@@ -464,7 +472,9 @@ export async function handleRetellWebhook(
           UPDATE subscriptions
           SET status = 'active',
               start_date = ${now},
-              alert_sent_at = ${null}
+              alert_sent_at = ${null},
+              alert_20_sent_at = ${null},
+              alert_10_sent_at = ${null}
           WHERE id = ${queuedSubscription.id}
         `;
 
@@ -543,18 +553,29 @@ export async function handleRetellWebhook(
           `Paketiniz tukendi. Siradaki paketiniz bulunmadigi ve kart kaydiniz olmadigi icin yeni paket satin almaniz gerekiyor: https://www.mglsystems.uk/dashboard/billing`
         );
       }
-    } else if (percentRemaining <= 10 && canSendAlert) {
+    } else if (percentRemaining <= 10 && !subscription.alert_10_sent_at) {
       await sendAlert(
         webhookUser.id,
         `Son ${remainingMinutes} dakikaniz kaldi. (${totalMinutes} dk paketinizin %${Math.round(percentRemaining)}'i). Siradaki paketinizi simdiden satin alabilirsiniz: https://www.mglsystems.uk/dashboard/billing`
       );
-      await sql`UPDATE subscriptions SET alert_sent_at = ${now} WHERE id = ${subscription.id}`;
-    } else if (percentRemaining <= 20 && percentRemaining > 10 && canSendAlert) {
+      await sql`
+        UPDATE subscriptions
+        SET alert_sent_at = ${now},
+            alert_10_sent_at = ${now},
+            alert_20_sent_at = COALESCE(alert_20_sent_at, ${now})
+        WHERE id = ${subscription.id}
+      `;
+    } else if (percentRemaining <= 20 && !subscription.alert_20_sent_at) {
       await sendAlert(
         webhookUser.id,
         `Paketinizin %${Math.round(percentRemaining)}'i kaldi (${remainingMinutes}/${totalMinutes} dk). Isterseniz siradaki paketinizi simdiden ayarlayabilirsiniz: https://www.mglsystems.uk/dashboard/billing`
       );
-      await sql`UPDATE subscriptions SET alert_sent_at = ${now} WHERE id = ${subscription.id}`;
+      await sql`
+        UPDATE subscriptions
+        SET alert_sent_at = ${now},
+            alert_20_sent_at = ${now}
+        WHERE id = ${subscription.id}
+      `;
     }
   }
 

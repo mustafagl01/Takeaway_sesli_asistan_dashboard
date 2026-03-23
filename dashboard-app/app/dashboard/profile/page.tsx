@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 interface ProfileFormData {
   name: string;
   email: string;
+  phone: string;
   retellApiKey: string;
   retellWebhookKey: string;
   retellAgentId: string;
@@ -33,6 +34,7 @@ export default function ProfilePage() {
   const [profileForm, setProfileForm] = useState<ProfileFormData>({
     name: session?.user?.name || '',
     email: session?.user?.email || '',
+    phone: '',
     retellApiKey: '',
     retellWebhookKey: '',
     retellAgentId: '',
@@ -66,6 +68,7 @@ export default function ProfilePage() {
             ...prev,
             name: data.data.name,
             email: data.data.email,
+            phone: data.data.phone || '',
             retellAgentId: data.data.retellAgentId || '',
             webhookUrl: data.data.webhookUrl || '',
           }));
@@ -125,11 +128,13 @@ export default function ProfilePage() {
     try {
       const body: {
         name: string;
+        phone: string | null;
         retell_agent_id: string | null;
         retell_api_key?: string | null;
         retell_webhook_key?: string | null;
       } = {
         name: profileForm.name,
+        phone: profileForm.phone.replace(/[\s().-]/g, '').trim() || null,
         retell_agent_id: profileForm.retellAgentId.replace(/\r\n|\r|\n/g, '').trim() || null,
       };
 
@@ -171,6 +176,7 @@ export default function ProfilePage() {
         }
         setProfileForm((prev) => ({
           ...prev,
+          phone: data.data?.phone ?? body.phone ?? '',
           retellApiKey: '',
           retellWebhookKey: '',
           retellAgentId: data.data?.retellAgentId ?? body.retell_agent_id ?? '',
@@ -320,6 +326,24 @@ export default function ProfilePage() {
                   title="Email cannot be changed"
                 />
                 <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Email cannot be changed</p>
+              </div>
+
+              <div className="mb-5">
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Alert Phone Number
+                </label>
+                <input
+                  type="tel"
+                  id="phone"
+                  value={profileForm.phone}
+                  onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                  placeholder="+447700900123"
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all"
+                  autoComplete="tel"
+                />
+                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  20% ve 10% kullanim uyarilari icin SMS bu numaraya gider. Uluslararasi format kullanin: +447...
+                </p>
               </div>
 
               <div className="mb-6 rounded-2xl border border-indigo-200/60 dark:border-indigo-700/60 bg-indigo-50/60 dark:bg-indigo-950/30 p-5">

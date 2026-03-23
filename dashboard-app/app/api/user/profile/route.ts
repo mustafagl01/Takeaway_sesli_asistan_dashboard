@@ -8,6 +8,13 @@ export const runtime = 'nodejs';
 const MAX_RETELL_KEY_LENGTH = 2048;
 const MAX_RETELL_WEBHOOK_KEY_LENGTH = 2048;
 const MAX_RETELL_AGENT_ID_LENGTH = 256;
+const MAX_PHONE_LENGTH = 32;
+
+function normalizePhoneInput(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.replace(/[\s().-]/g, '').trim();
+  return normalized || null;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,6 +38,7 @@ export async function GET(request: NextRequest) {
       data: {
         name: user.name,
         email: user.email,
+        phone: user.phone || '',
         hasRetellKey: !!user.retell_api_key?.trim(),
         hasRetellWebhookKey: !!user.retell_webhook_key?.trim(),
         retellAgentId: user.retell_agent_id || '',
@@ -82,11 +90,35 @@ export async function PATCH(request: NextRequest) {
 
     const updates: {
       name: string;
+      phone?: string | null;
       retell_api_key?: string | null;
       retell_webhook_key?: string | null;
       retell_agent_id?: string | null;
       retell_webhook_token?: string | null;
     } = { name };
+
+    if (body.phone !== undefined) {
+      if (body.phone === null || body.phone === '') {
+        updates.phone = null;
+      } else {
+        const normalized = normalizePhoneInput(body.phone);
+        if (!normalized) {
+          updates.phone = null;
+        } else if (normalized.length > MAX_PHONE_LENGTH) {
+          return NextResponse.json(
+            { success: false, error: `Phone number must be ${MAX_PHONE_LENGTH} characters or less` },
+            { status: 400 }
+          );
+        } else if (!/^\+[1-9]\d{7,15}$/.test(normalized)) {
+          return NextResponse.json(
+            { success: false, error: 'Phone number must use international format, for example +447700900123' },
+            { status: 400 }
+          );
+        } else {
+          updates.phone = normalized;
+        }
+      }
+    }
 
     if (body.retell_api_key !== undefined) {
       if (body.retell_api_key === null || body.retell_api_key === '') {
@@ -160,6 +192,7 @@ export async function PATCH(request: NextRequest) {
       success: true,
       message: 'Profile updated successfully',
       data: {
+        phone: nextUser?.phone || '',
         hasRetellKey: !!nextUser?.retell_api_key,
         hasRetellWebhookKey: !!nextUser?.retell_webhook_key,
         retellAgentId: nextUser?.retell_agent_id || '',
