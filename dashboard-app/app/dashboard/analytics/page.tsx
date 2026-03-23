@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AnalyticsChart from '@/components/AnalyticsChart'
 import type { Call } from '@/lib/db'
-import { formatDurationFromMilliseconds } from '@/lib/duration'
+import { formatDurationFromMilliseconds, formatDurationFromSeconds, millisecondsToSeconds } from '@/lib/duration'
 
 // ============================================================================
 // Type Definitions
@@ -312,7 +312,7 @@ export default function AnalyticsPage() {
               />
               <MetricCard
                 title="Avg Duration"
-                value={formatDurationFromMilliseconds(metrics.avgDurationMs)}
+                value={formatDurationFromSeconds(metrics.avgDurationSeconds)}
                 icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                 color="violet"
                 delay={200}
@@ -392,14 +392,20 @@ function getLast30DaysDate(): string {
 function calculateAnalyticsMetrics(calls: Call[]) {
   const totalCalls = calls.length
   const completedCalls = calls.filter(c => c.status === 'completed').length
-  const avgDurationMs = totalCalls > 0
-    ? calls.reduce((sum, c) => sum + (c.duration || 0), 0) / totalCalls
+  const normalizedDurationsSeconds = calls
+    .map((call) => millisecondsToSeconds(call.duration))
+    .filter((duration): duration is number => duration != null)
+  const avgDurationSeconds = normalizedDurationsSeconds.length > 0
+    ? normalizedDurationsSeconds.reduce((sum, duration) => sum + duration, 0) / normalizedDurationsSeconds.length
     : 0
   const completionRate = totalCalls > 0 ? (completedCalls / totalCalls) * 100 : 0
 
   const callsWithCost = calls.filter(c => c.call_cost_cents != null && c.call_cost_cents >= 0)
   const totalCostCents = callsWithCost.reduce((sum, c) => sum + (c.call_cost_cents ?? 0), 0)
-  const totalDurationMinutes = callsWithCost.reduce((sum, c) => sum + (c.duration ?? 0), 0) / 60000
+  const totalDurationMinutes = callsWithCost.reduce((sum, call) => {
+    const durationSeconds = millisecondsToSeconds(call.duration) ?? 0
+    return sum + (durationSeconds / 60)
+  }, 0)
   const costPerMinuteCents = totalDurationMinutes > 0 ? totalCostCents / totalDurationMinutes : 0
 
   const hourCounts: Record<number, number> = {}
@@ -420,7 +426,7 @@ function calculateAnalyticsMetrics(calls: Call[]) {
   return {
     totalCalls,
     completedCalls,
-    avgDurationMs: Math.round(avgDurationMs),
+    avgDurationSeconds: Math.round(avgDurationSeconds),
     completionRate,
     peakHour,
     peakHourCount,

@@ -78,7 +78,7 @@ export async function POST(): Promise<NextResponse> {
       user_id: session.user.id,
       business_id: "", // Default to empty string for customer-centric model
       phone_number: call.phone_number,
-      duration: call.duration ?? null,
+      duration: call.duration != null ? Math.round(call.duration * 1000) : null,
       status: call.status,
       outcome: call.outcome ?? null,
       transcript: call.transcript ?? null,

@@ -3,6 +3,11 @@ export function millisecondsToSeconds(durationMs: number | null | undefined): nu
     return null;
   }
 
+  // Legacy manual sync rows were stored in seconds instead of milliseconds.
+  if (durationMs > 0 && durationMs < 1000) {
+    return Math.max(0, Math.round(durationMs));
+  }
+
   return Math.max(0, Math.round(durationMs / 1000));
 }
 
