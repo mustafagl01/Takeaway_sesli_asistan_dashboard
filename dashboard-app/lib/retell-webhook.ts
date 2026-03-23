@@ -161,20 +161,31 @@ async function resolveWebhookUser(
 }
 
 export function verifyRetellSignature(bodyText: string, signature: string | null, webhookKey: string | null): boolean {
-  const normalizedSignature = normalizePlainText(signature)?.replace(/^sha256=/i, '') || null;
   const normalizedWebhookKey = normalizeRetellSecret(webhookKey);
-
-  if (!normalizedSignature || !normalizedWebhookKey) {
+  if (!signature || !normalizedWebhookKey) {
     return false;
   }
 
+  const trimmedSig = signature.trim();
+
+  // Retell production format: "v=TIMESTAMP,d=HMAC_HEX"
+  // Retell signs: HMAC-SHA256(secret, "TIMESTAMP.bodyText")
+  const retellMatch = trimmedSig.match(/^v=(\d+),d=([a-f0-9]+)$/i);
+  if (retellMatch) {
+    const timestamp = retellMatch[1];
+    const providedHmac = retellMatch[2].toLowerCase();
+    const signedPayload = `${timestamp}.${bodyText}`;
+    const expected = crypto.createHmac('sha256', normalizedWebhookKey).update(signedPayload, 'utf8').digest('hex');
+    if (expected.length !== providedHmac.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(providedHmac, 'utf8'));
+  }
+
+  // Fallback: bare HMAC or "sha256=HMAC" (test probes)
+  const bareHmac = trimmedSig.replace(/^sha256=/i, '').trim();
+  if (!bareHmac) return false;
   const expected = crypto.createHmac('sha256', normalizedWebhookKey).update(bodyText, 'utf8').digest('hex');
-
-  if (expected.length !== normalizedSignature.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(normalizedSignature, 'utf8'));
+  if (expected.length !== bareHmac.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(bareHmac, 'utf8'));
 }
 
 function getTrustedForwardSecret(): string | null {
