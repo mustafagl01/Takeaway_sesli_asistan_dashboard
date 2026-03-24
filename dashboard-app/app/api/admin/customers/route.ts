@@ -5,6 +5,7 @@ import { createSubscription, createUser, deleteUser, getUserByEmail, getUserById
 import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { isAdminEmail } from '@/lib/admin';
 import { sendCustomerInviteEmail } from '@/lib/mailer';
+import { generateRetellWebhookToken, normalizeRetellSecret } from '@/lib/retell-webhook';
 import {
   buildPresetPlanName,
   derivePaygRatePence,
@@ -18,7 +19,14 @@ import { sql } from '@vercel/postgres';
 
 export const runtime = 'nodejs';
 
-type AdminAction = 'add_minutes' | 'assign_package' | 'queue_package' | 'create_customer' | 'cancel_package' | 'delete_customer';
+type AdminAction =
+  | 'add_minutes'
+  | 'assign_package'
+  | 'queue_package'
+  | 'create_customer'
+  | 'cancel_package'
+  | 'delete_customer'
+  | 'update_retell_config';
 type PackageMode = 'preset' | 'custom';
 
 interface AdminPackageInput {
@@ -36,6 +44,14 @@ function unauthorizedResponse() {
 
 function normalizeEmail(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function normalizeOptionalText(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'string') return null;
+  const normalized = value.replace(/\r\n|\r|\n/g, '').trim();
+  return normalized || null;
 }
 
 function generatePassword(): string {
@@ -214,6 +230,8 @@ export async function GET() {
         u.name,
         u.email,
         u.created_at as user_created_at,
+        u.retell_webhook_token,
+        u.retell_agent_id,
         s.id as subscription_id,
         s.plan_name,
         s.total_minutes,
@@ -259,6 +277,8 @@ export async function GET() {
       name: row.name,
       email: row.email,
       created_at: row.user_created_at,
+      retell_webhook_token: row.retell_webhook_token,
+      retell_agent_id: row.retell_agent_id,
       subscription: row.subscription_id ? {
         id: row.subscription_id,
         plan_name: row.plan_name,
@@ -434,6 +454,58 @@ export async function POST(req: Request) {
         success: true,
         message: `${user.name} icin siradaki paket kaydedildi.`,
         data: { packageSummary: parsed.data.summary },
+      });
+    }
+
+    if (action === 'update_retell_config') {
+      const userId = typeof body.userId === 'string' ? body.userId : '';
+      if (!userId) {
+        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+      }
+
+      const user = await getUserById(userId);
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      const hasRetellApiKey = Object.prototype.hasOwnProperty.call(body, 'retellApiKey');
+      const hasRetellWebhookKey = Object.prototype.hasOwnProperty.call(body, 'retellWebhookKey');
+      const hasRetellAgentId = Object.prototype.hasOwnProperty.call(body, 'retellAgentId');
+
+      const nextRetellApiKey = normalizeOptionalText(body.retellApiKey);
+      const nextRetellWebhookKey = normalizeRetellSecret(body.retellWebhookKey);
+      const nextRetellAgentId = normalizeOptionalText(body.retellAgentId);
+      const nextWebhookToken = user.retell_webhook_token || generateRetellWebhookToken();
+
+      await sql`
+        UPDATE users
+        SET
+          retell_api_key = CASE
+            WHEN ${hasRetellApiKey} AND ${nextRetellApiKey !== null} THEN ${nextRetellApiKey}
+            ELSE retell_api_key
+          END,
+          retell_webhook_key = CASE
+            WHEN ${hasRetellWebhookKey} AND ${nextRetellWebhookKey !== null} THEN ${nextRetellWebhookKey}
+            ELSE retell_webhook_key
+          END,
+          retell_agent_id = CASE
+            WHEN ${hasRetellAgentId} THEN ${nextRetellAgentId}
+            ELSE retell_agent_id
+          END,
+          retell_webhook_token = COALESCE(retell_webhook_token, ${nextWebhookToken}),
+          updated_at = ${new Date().toISOString()}
+        WHERE id = ${userId}
+      `;
+
+      await recordBillingEvent(
+        userId,
+        'admin_retell_config_updated',
+        `Admin tarafindan Retell yapilandirmasi guncellendi${hasRetellAgentId ? ` (Agent ID: ${nextRetellAgentId || 'temizlendi'})` : ''}`
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: `${user.name} icin Retell ayarlari kaydedildi.`,
       });
     }
 

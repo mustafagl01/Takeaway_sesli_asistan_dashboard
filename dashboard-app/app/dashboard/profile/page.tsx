@@ -8,10 +8,6 @@ interface ProfileFormData {
   name: string;
   email: string;
   phone: string;
-  retellApiKey: string;
-  retellWebhookKey: string;
-  retellAgentId: string;
-  webhookUrl: string;
 }
 
 interface PasswordFormData {
@@ -35,16 +31,8 @@ export default function ProfilePage() {
     name: session?.user?.name || '',
     email: session?.user?.email || '',
     phone: '',
-    retellApiKey: '',
-    retellWebhookKey: '',
-    retellAgentId: '',
-    webhookUrl: '',
   });
-  const [hasRetellKey, setHasRetellKey] = useState(false);
-  const [hasRetellWebhookKey, setHasRetellWebhookKey] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
-  const [retellKeyTouched, setRetellKeyTouched] = useState(false);
-  const [retellWebhookKeyTouched, setRetellWebhookKeyTouched] = useState(false);
 
   const [passwordForm, setPasswordForm] = useState<PasswordFormData>({
     currentPassword: '',
@@ -69,11 +57,7 @@ export default function ProfilePage() {
             name: data.data.name,
             email: data.data.email,
             phone: data.data.phone || '',
-            retellAgentId: data.data.retellAgentId || '',
-            webhookUrl: data.data.webhookUrl || '',
           }));
-          setHasRetellKey(!!data.data.hasRetellKey);
-          setHasRetellWebhookKey(!!data.data.hasRetellWebhookKey);
         }
         setProfileLoaded(true);
       })
@@ -129,24 +113,10 @@ export default function ProfilePage() {
       const body: {
         name: string;
         phone: string | null;
-        retell_agent_id: string | null;
-        retell_api_key?: string | null;
-        retell_webhook_key?: string | null;
       } = {
         name: profileForm.name,
         phone: profileForm.phone.replace(/[\s().-]/g, '').trim() || null,
-        retell_agent_id: profileForm.retellAgentId.replace(/\r\n|\r|\n/g, '').trim() || null,
       };
-
-      if (retellKeyTouched) {
-        const key = profileForm.retellApiKey.replace(/\r\n|\r|\n/g, '').trim();
-        body.retell_api_key = key || null;
-      }
-
-      if (retellWebhookKeyTouched) {
-        const key = profileForm.retellWebhookKey.replace(/\r\n|\r|\n/g, '').trim();
-        body.retell_webhook_key = key || null;
-      }
 
       const response = await fetch('/api/user/profile', {
         method: 'PATCH',
@@ -168,22 +138,10 @@ export default function ProfilePage() {
 
       if (response.ok) {
         setProfileMessage({ type: 'success', text: 'Profile updated successfully' });
-        if (retellKeyTouched) {
-          setHasRetellKey(!!body.retell_api_key);
-        }
-        if (retellWebhookKeyTouched) {
-          setHasRetellWebhookKey(!!body.retell_webhook_key);
-        }
         setProfileForm((prev) => ({
           ...prev,
           phone: data.data?.phone ?? body.phone ?? '',
-          retellApiKey: '',
-          retellWebhookKey: '',
-          retellAgentId: data.data?.retellAgentId ?? body.retell_agent_id ?? '',
-          webhookUrl: data.data?.webhookUrl ?? prev.webhookUrl,
         }));
-        setRetellKeyTouched(false);
-        setRetellWebhookKeyTouched(false);
       } else {
         setProfileMessage({ type: 'error', text: data.error || 'Failed to update profile' });
       }
@@ -261,7 +219,7 @@ export default function ProfilePage() {
                 <span className="gradient-text">Profile</span>
               </h1>
               <p className="mt-3 text-lg text-gray-600 dark:text-gray-400">
-                Manage your account settings and Retell workspace connection.
+                Manage your account settings and notification details.
               </p>
             </div>
           </div>
@@ -343,100 +301,6 @@ export default function ProfilePage() {
                 />
                 <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                   20% ve 10% kullanim uyarilari icin SMS bu numaraya gider. Uluslararasi format kullanin: +447...
-                </p>
-              </div>
-
-              <div className="mb-6 rounded-2xl border border-indigo-200/60 dark:border-indigo-700/60 bg-indigo-50/60 dark:bg-indigo-950/30 p-5">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-white">Retell Workspace Connection</h3>
-                </div>
-                <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
-                  <p>1. Save your workspace webhook key and optional agent ID here.</p>
-                  <p>2. Copy the Post-call Webhook URL below into the matching Retell workspace.</p>
-                  <p>3. Keep the API key only for call sync and detail fetches.</p>
-                </div>
-              </div>
-
-              <div className="mb-5">
-                <label htmlFor="webhookUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Post-call Webhook URL
-                </label>
-                <input
-                  type="text"
-                  id="webhookUrl"
-                  value={profileForm.webhookUrl}
-                  readOnly
-                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200"
-                />
-                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  Use this exact URL in Retell as-is. Do not replace it with the generic /api/retell/webhook route, because each customer has a unique token.
-                </p>
-              </div>
-
-              <div className="mb-5">
-                <label htmlFor="retellAgentId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Retell Agent ID
-                </label>
-                <input
-                  type="text"
-                  id="retellAgentId"
-                  value={profileForm.retellAgentId}
-                  onChange={(e) => setProfileForm((prev) => ({ ...prev, retellAgentId: e.target.value }))}
-                  placeholder="Optional but recommended for fallback matching"
-                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all"
-                  autoComplete="off"
-                />
-                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  If a workspace has a single main agent, save it here so the legacy webhook route can still resolve calls.
-                </p>
-              </div>
-
-              <div className="mb-5">
-                <label htmlFor="retellWebhookKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Retell Webhook Key
-                </label>
-                <input
-                  type="password"
-                  id="retellWebhookKey"
-                  value={profileForm.retellWebhookKey}
-                  onChange={(e) => {
-                    setProfileForm((prev) => ({ ...prev, retellWebhookKey: e.target.value }));
-                    setRetellWebhookKeyTouched(true);
-                  }}
-                  placeholder={hasRetellWebhookKey ? 'Saved. Enter a new key to replace it' : 'Paste the webhook signing key from this Retell workspace'}
-                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all"
-                  autoComplete="off"
-                />
-                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  {hasRetellWebhookKey
-                    ? 'Webhook key saved. Enter a new value only if you want to rotate it.'
-                    : 'Required so the dashboard can verify Retell webhook signatures securely.'}
-                </p>
-              </div>
-
-              <div className="mb-5">
-                <label htmlFor="retellApiKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Retell API Key
-                </label>
-                <input
-                  type="password"
-                  id="retellApiKey"
-                  value={profileForm.retellApiKey}
-                  onChange={(e) => {
-                    setProfileForm((prev) => ({ ...prev, retellApiKey: e.target.value }));
-                    setRetellKeyTouched(true);
-                  }}
-                  placeholder={hasRetellKey ? 'Saved. Enter a new key to replace it' : 'Paste your Retell API key to sync calls'}
-                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent backdrop-blur-sm transition-all"
-                  autoComplete="off"
-                />
-                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  {hasRetellKey
-                    ? 'API key saved. Enter a new value only if you want to replace it.'
-                    : 'Used for manual sync and call detail fetches on the dashboard.'}
                 </p>
               </div>
 

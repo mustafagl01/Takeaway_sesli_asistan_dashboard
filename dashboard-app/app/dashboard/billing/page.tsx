@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import PricingSlider from '@/components/PricingSlider';
 import PricingTiers from '@/components/PricingTiers';
 import ActiveSubscriptionWidget from '@/components/ActiveSubscriptionWidget';
+import { getActiveSubscription } from '@/lib/db';
 
 export default async function BillingPage() {
     const session = await auth();
@@ -10,6 +11,9 @@ export default async function BillingPage() {
     if (!session || !session.user?.id) {
         redirect('/login');
     }
+
+    const subscription = await getActiveSubscription(session.user.id);
+    const hasActivePackage = subscription?.status === 'active';
 
     return (
         <>
@@ -52,15 +56,31 @@ export default async function BillingPage() {
                         <ActiveSubscriptionWidget />
                     </div>
 
-                    {/* Pricing Tier Cards */}
-                    <div className="mb-16 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-                        <PricingTiers />
-                    </div>
+                    {hasActivePackage ? (
+                        <div className="mb-16 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+                            <div className="max-w-3xl mx-auto rounded-2xl border border-indigo-200/60 dark:border-indigo-700/60 bg-indigo-50/70 dark:bg-indigo-950/20 p-6 text-center">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                                    Aktif paketiniz kullanimda
+                                </h2>
+                                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                                    Paketiniz bitmeye yaklastiginda veya yeni paketi planlamak istediginizde bu sayfada
+                                    sonraki satin alim secenekleri tekrar gosterilecektir.
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Pricing Tier Cards */}
+                            <div className="mb-16 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+                                <PricingTiers />
+                            </div>
 
-                    {/* Interactive Slider */}
-                    <div className="animate-fade-in-up" style={{ animationDelay: '300ms' }}>
-                        <PricingSlider />
-                    </div>
+                            {/* Interactive Slider */}
+                            <div className="animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+                                <PricingSlider />
+                            </div>
+                        </>
+                    )}
 
                     {/* Feature Cards */}
                     <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">

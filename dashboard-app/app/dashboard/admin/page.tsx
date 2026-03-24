@@ -16,6 +16,8 @@ interface CustomerData {
   name: string;
   email: string;
   created_at: string;
+  retell_webhook_token: string | null;
+  retell_agent_id: string | null;
   subscription: {
     id: string;
     plan_name: string;
@@ -36,6 +38,12 @@ interface CustomerData {
     created_at: string;
   } | null;
   total_calls: number;
+}
+
+interface RetellConfigFormState {
+  retellApiKey: string;
+  retellWebhookKey: string;
+  retellAgentId: string;
 }
 
 type PackageMode = 'preset' | 'custom';
@@ -286,6 +294,7 @@ export default function AdminPage() {
   const { data: session, status } = useSession();
 
   const [customers, setCustomers] = useState<CustomerData[]>([]);
+  const [appOrigin, setAppOrigin] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -308,6 +317,10 @@ export default function AdminPage() {
 
   const [credentialResult, setCredentialResult] = useState<CreateCustomerResult | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [retellConfigOpenFor, setRetellConfigOpenFor] = useState<string | null>(null);
+  const [retellForms, setRetellForms] = useState<Record<string, RetellConfigFormState>>({});
+  const [retellSavingUserId, setRetellSavingUserId] = useState<string | null>(null);
+  const [retellFeedback, setRetellFeedback] = useState<{ userId: string; type: 'success' | 'error'; text: string } | null>(null);
 
   const isAdmin = isAdminEmail(session?.user?.email);
 
@@ -330,10 +343,22 @@ export default function AdminPage() {
   }, [isAdmin, status]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setAppOrigin(window.location.origin);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!copyMessage) return undefined;
     const timer = window.setTimeout(() => setCopyMessage(null), 2500);
     return () => window.clearTimeout(timer);
   }, [copyMessage]);
+
+  useEffect(() => {
+    if (!retellFeedback) return undefined;
+    const timer = window.setTimeout(() => setRetellFeedback(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [retellFeedback]);
 
   const summary = useMemo(() => {
     const activePackages = customers.filter((customer) => customer.subscription?.status === 'active').length;
@@ -571,6 +596,96 @@ export default function AdminPage() {
     }
   }
 
+  function openRetellConfig(customer: CustomerData) {
+    setRetellConfigOpenFor((prev) => (prev === customer.id ? null : customer.id));
+    setRetellForms((prev) => ({
+      ...prev,
+      [customer.id]: prev[customer.id] || {
+        retellApiKey: '',
+        retellWebhookKey: '',
+        retellAgentId: customer.retell_agent_id || '',
+      },
+    }));
+  }
+
+  function updateRetellForm(userId: string, updates: Partial<RetellConfigFormState>) {
+    setRetellForms((prev) => ({
+      ...prev,
+      [userId]: {
+        retellApiKey: prev[userId]?.retellApiKey || '',
+        retellWebhookKey: prev[userId]?.retellWebhookKey || '',
+        retellAgentId: prev[userId]?.retellAgentId || '',
+        ...updates,
+      },
+    }));
+  }
+
+  function getWebhookUrl(customer: CustomerData) {
+    if (!customer.retell_webhook_token) return '';
+    return `${appOrigin || ''}/api/retell/webhook/${customer.retell_webhook_token}`;
+  }
+
+  async function handleRetellConfigSave(customer: CustomerData) {
+    const form = retellForms[customer.id];
+    if (!form) return;
+
+    setRetellSavingUserId(customer.id);
+    setRetellFeedback(null);
+
+    try {
+      const payload: Record<string, unknown> = {
+        action: 'update_retell_config',
+        userId: customer.id,
+        retellAgentId: form.retellAgentId.trim() || null,
+      };
+
+      const nextRetellApiKey = form.retellApiKey.replace(/\r\n|\r|\n/g, '').trim();
+      const nextRetellWebhookKey = form.retellWebhookKey.replace(/\r\n|\r|\n/g, '').trim();
+
+      if (nextRetellApiKey) {
+        payload.retellApiKey = nextRetellApiKey;
+      }
+
+      if (nextRetellWebhookKey) {
+        payload.retellWebhookKey = nextRetellWebhookKey;
+      }
+
+      const res = await fetch('/api/admin/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Retell ayarlari kaydedilemedi');
+      }
+
+      setRetellForms((prev) => ({
+        ...prev,
+        [customer.id]: {
+          retellApiKey: '',
+          retellWebhookKey: '',
+          retellAgentId: form.retellAgentId.trim(),
+        },
+      }));
+      setRetellFeedback({
+        userId: customer.id,
+        type: 'success',
+        text: data.message || 'Retell ayarlari kaydedildi',
+      });
+      await fetchCustomers();
+    } catch (err) {
+      setRetellFeedback({
+        userId: customer.id,
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Sunucu hatasi',
+      });
+    } finally {
+      setRetellSavingUserId(null);
+    }
+  }
+
   function getInitials(customer: CustomerData) {
     const source = customer.name?.trim() || customer.email;
     return source
@@ -733,139 +848,262 @@ export default function AdminPage() {
                     const statusChip = getStatusChip(customer);
                     const percentUsed = customer.subscription?.percent_used || 0;
                     const remaining = customer.subscription?.remaining_minutes || 0;
+                    const retellForm = retellForms[customer.id] || {
+                      retellApiKey: '',
+                      retellWebhookKey: '',
+                      retellAgentId: customer.retell_agent_id || '',
+                    };
+                    const webhookUrl = getWebhookUrl(customer);
+                    const isRetellOpen = retellConfigOpenFor === customer.id;
+                    const feedback = retellFeedback?.userId === customer.id ? retellFeedback : null;
 
                     return (
-                      <tr key={customer.id} className="hover:bg-indigo-500/5 dark:hover:bg-indigo-500/10 transition-colors">
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-4">
-                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white font-semibold flex items-center justify-center shadow-lg shadow-indigo-500/25">
-                              {getInitials(customer)}
-                            </div>
-                            <div>
-                              <div className="font-semibold text-gray-900 dark:text-white">{customer.name}</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">{customer.email}</div>
-                              <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                Olusturma: {new Date(customer.created_at).toLocaleDateString('en-GB')}
+                      <React.Fragment key={customer.id}>
+                        <tr className="hover:bg-indigo-500/5 dark:hover:bg-indigo-500/10 transition-colors">
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-4">
+                              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white font-semibold flex items-center justify-center shadow-lg shadow-indigo-500/25">
+                                {getInitials(customer)}
                               </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          {customer.subscription ? (
-                            <div className="space-y-1">
-                              <div className="font-medium text-gray-900 dark:text-white">{customer.subscription.plan_name}</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">
-                                {customer.subscription.status === 'pay_as_you_go'
-                                  ? `${customer.subscription.rate_pence}p/dk`
-                                  : `${customer.subscription.total_minutes} dk | ${customer.subscription.rate_pence}p/dk`}
-                              </div>
-                              {customer.subscription.payg_rate_pence ? (
-                                <div className="text-xs text-gray-400 dark:text-gray-500">
-                                  PAYG fallback: {customer.subscription.payg_rate_pence}p/dk
+                              <div>
+                                <div className="font-semibold text-gray-900 dark:text-white">{customer.name}</div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">{customer.email}</div>
+                                <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                  Olusturma: {new Date(customer.created_at).toLocaleDateString('en-GB')}
                                 </div>
-                              ) : null}
-                              {customer.next_subscription ? (
-                                <div className="text-xs text-indigo-600 dark:text-indigo-300 pt-1">
-                                  Siradaki paket: {customer.next_subscription.plan_name} | {customer.next_subscription.total_minutes} dk | {customer.next_subscription.rate_pence}p/dk
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <span className="text-sm text-gray-500 dark:text-gray-400">Paket yok</span>
-                              {customer.next_subscription ? (
-                                <div className="text-xs text-indigo-600 dark:text-indigo-300">
-                                  Siradaki paket: {customer.next_subscription.plan_name} | {customer.next_subscription.total_minutes} dk | {customer.next_subscription.rate_pence}p/dk
-                                </div>
-                              ) : null}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-5">
-                          {customer.subscription && customer.subscription.status !== 'pay_as_you_go' ? (
-                            <div className="space-y-2 min-w-[220px]">
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-500 dark:text-gray-400">
-                                  {customer.subscription.used_minutes.toFixed(1)} / {customer.subscription.total_minutes} dk
-                                </span>
-                                <span className="font-semibold text-gray-900 dark:text-white">{remaining.toFixed(1)} dk</span>
-                              </div>
-                              <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-2.5 overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full ${getUsageColor(percentUsed)}`}
-                                  style={{ width: `${Math.min(percentUsed, 100)}%` }}
-                                />
                               </div>
                             </div>
-                          ) : customer.subscription?.status === 'pay_as_you_go' ? (
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Dakika paketi yok, kullandikca ode.</span>
-                          ) : (
-                            <span className="text-sm text-gray-500 dark:text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="font-semibold text-gray-900 dark:text-white">{customer.total_calls}</div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">toplam cagri</div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${statusChip.className}`}>
-                            {statusChip.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex flex-wrap items-center justify-end gap-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAssignPackageModal({ userId: customer.id, name: customer.name });
-                                setAssignPackageForm(defaultPackageFormState());
-                              }}
-                              disabled={actionLoading}
-                              className="px-4 py-2 rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-950/60 transition-colors text-sm font-medium"
-                            >
-                              Paket Ata
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setQueuePackageModal({ userId: customer.id, name: customer.name });
-                                setQueuePackageForm(defaultPackageFormState());
-                              }}
-                              disabled={actionLoading}
-                              className="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-950/60 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              Sonraki Paket
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAddMinutesModal({ userId: customer.id, name: customer.name });
-                                setMinutesToAdd(100);
-                              }}
-                              disabled={actionLoading}
-                              className="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-950/60 transition-colors text-sm font-medium"
-                            >
-                              + Dakika
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleCancelPackage(customer)}
-                              disabled={actionLoading || !customer.subscription}
-                              className="px-4 py-2 rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-950/60 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              Paket Iptal
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleDeleteCustomer(customer)}
-                              disabled={actionLoading}
-                              className="px-4 py-2 rounded-xl bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-950/60 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              Musteri Sil
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="px-6 py-5">
+                            {customer.subscription ? (
+                              <div className="space-y-1">
+                                <div className="font-medium text-gray-900 dark:text-white">{customer.subscription.plan_name}</div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  {customer.subscription.status === 'pay_as_you_go'
+                                    ? `${customer.subscription.rate_pence}p/dk`
+                                    : `${customer.subscription.total_minutes} dk | ${customer.subscription.rate_pence}p/dk`}
+                                </div>
+                                {customer.subscription.payg_rate_pence ? (
+                                  <div className="text-xs text-gray-400 dark:text-gray-500">
+                                    PAYG fallback: {customer.subscription.payg_rate_pence}p/dk
+                                  </div>
+                                ) : null}
+                                {customer.next_subscription ? (
+                                  <div className="text-xs text-indigo-600 dark:text-indigo-300 pt-1">
+                                    Siradaki paket: {customer.next_subscription.plan_name} | {customer.next_subscription.total_minutes} dk | {customer.next_subscription.rate_pence}p/dk
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                <span className="text-sm text-gray-500 dark:text-gray-400">Paket yok</span>
+                                {customer.next_subscription ? (
+                                  <div className="text-xs text-indigo-600 dark:text-indigo-300">
+                                    Siradaki paket: {customer.next_subscription.plan_name} | {customer.next_subscription.total_minutes} dk | {customer.next_subscription.rate_pence}p/dk
+                                  </div>
+                                ) : null}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-5">
+                            {customer.subscription && customer.subscription.status !== 'pay_as_you_go' ? (
+                              <div className="space-y-2 min-w-[220px]">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-500 dark:text-gray-400">
+                                    {customer.subscription.used_minutes.toFixed(1)} / {customer.subscription.total_minutes} dk
+                                  </span>
+                                  <span className="font-semibold text-gray-900 dark:text-white">{remaining.toFixed(1)} dk</span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-2.5 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${getUsageColor(percentUsed)}`}
+                                    style={{ width: `${Math.min(percentUsed, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ) : customer.subscription?.status === 'pay_as_you_go' ? (
+                              <span className="text-sm text-gray-500 dark:text-gray-400">Dakika paketi yok, kullandikca ode.</span>
+                            ) : (
+                              <span className="text-sm text-gray-500 dark:text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="font-semibold text-gray-900 dark:text-white">{customer.total_calls}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400">toplam cagri</div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${statusChip.className}`}>
+                              {statusChip.label}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex flex-wrap items-center justify-end gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAssignPackageModal({ userId: customer.id, name: customer.name });
+                                  setAssignPackageForm(defaultPackageFormState());
+                                }}
+                                disabled={actionLoading}
+                                className="px-4 py-2 rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-950/60 transition-colors text-sm font-medium"
+                              >
+                                Paket Ata
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setQueuePackageModal({ userId: customer.id, name: customer.name });
+                                  setQueuePackageForm(defaultPackageFormState());
+                                }}
+                                disabled={actionLoading}
+                                className="px-4 py-2 rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-950/60 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Sonraki Paket
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAddMinutesModal({ userId: customer.id, name: customer.name });
+                                  setMinutesToAdd(100);
+                                }}
+                                disabled={actionLoading}
+                                className="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-950/60 transition-colors text-sm font-medium"
+                              >
+                                + Dakika
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openRetellConfig(customer)}
+                                disabled={actionLoading}
+                                className="px-4 py-2 rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-950/60 transition-colors text-sm font-medium"
+                              >
+                                {isRetellOpen ? 'Retell Gizle' : 'Retell Ayarlari'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleCancelPackage(customer)}
+                                disabled={actionLoading || !customer.subscription}
+                                className="px-4 py-2 rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-950/60 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Paket Iptal
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteCustomer(customer)}
+                                disabled={actionLoading}
+                                className="px-4 py-2 rounded-xl bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-950/60 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Musteri Sil
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {isRetellOpen ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 pb-6 pt-0">
+                              <div className="rounded-2xl border border-violet-200/70 dark:border-violet-800/70 bg-violet-50/70 dark:bg-violet-950/20 p-5">
+                                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
+                                  <div>
+                                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">Retell Yapilandirmasi</h3>
+                                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                      Secret alanlari gizli tutulur. Yeni deger girmezsen mevcut keyler korunur.
+                                    </p>
+                                  </div>
+                                  <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-white/80 dark:bg-gray-900/50 text-violet-700 dark:text-violet-300 border border-violet-200/70 dark:border-violet-700/70">
+                                    {customer.name}
+                                  </span>
+                                </div>
+
+                                <div className="mb-5">
+                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Webhook URL</label>
+                                  <div className="flex flex-col md:flex-row gap-3">
+                                    <input
+                                      type="text"
+                                      value={webhookUrl || 'Henuz olusturulmadi'}
+                                      readOnly
+                                      className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => void copyText('Webhook URL', webhookUrl)}
+                                      disabled={!webhookUrl}
+                                      className="px-4 py-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Kopyala
+                                    </button>
+                                  </div>
+                                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                    Token yoksa ilk kaydetme isleminde benzersiz webhook URL otomatik uretilir.
+                                  </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Retell API Key</label>
+                                    <input
+                                      type="password"
+                                      value={retellForm.retellApiKey}
+                                      onChange={(e) => updateRetellForm(customer.id, { retellApiKey: e.target.value })}
+                                      placeholder="Yeni key gir"
+                                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                      autoComplete="off"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Retell Webhook Key</label>
+                                    <input
+                                      type="password"
+                                      value={retellForm.retellWebhookKey}
+                                      onChange={(e) => updateRetellForm(customer.id, { retellWebhookKey: e.target.value })}
+                                      placeholder="Yeni key gir"
+                                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                      autoComplete="off"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Agent ID</label>
+                                    <input
+                                      type="text"
+                                      value={retellForm.retellAgentId}
+                                      onChange={(e) => updateRetellForm(customer.id, { retellAgentId: e.target.value })}
+                                      placeholder="agent_..."
+                                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                                      autoComplete="off"
+                                    />
+                                  </div>
+                                </div>
+
+                                {feedback ? (
+                                  <div
+                                    className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+                                      feedback.type === 'success'
+                                        ? 'border-emerald-200 dark:border-emerald-700 bg-emerald-50/80 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300'
+                                        : 'border-red-200 dark:border-red-700 bg-red-50/80 dark:bg-red-950/20 text-red-700 dark:text-red-300'
+                                    }`}
+                                  >
+                                    {feedback.text}
+                                  </div>
+                                ) : null}
+
+                                <div className="mt-5 flex items-center justify-between gap-4">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    Agent ID bos birakilirsa temizlenir. Secret alanlari sadece yeni deger girilirse degisir.
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleRetellConfigSave(customer)}
+                                    disabled={retellSavingUserId === customer.id}
+                                    className="px-5 py-3 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 text-white font-semibold shadow-lg shadow-violet-500/25 disabled:opacity-60 disabled:cursor-not-allowed"
+                                  >
+                                    {retellSavingUserId === customer.id ? 'Kaydediliyor...' : 'Kaydet'}
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

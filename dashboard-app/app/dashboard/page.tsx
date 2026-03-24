@@ -12,7 +12,7 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { getCallMetrics, getRecentCalls, getBusinessesForUser, type Call } from '@/lib/db';
+import { getActiveSubscription, getCallMetrics, getRecentCalls, getBusinessesForUser, type Call } from '@/lib/db';
 import ActiveSubscriptionWidget from '@/components/ActiveSubscriptionWidget';
 import AutoRefreshOnVisible from '@/components/AutoRefreshOnVisible';
 import { sql } from '@vercel/postgres';
@@ -29,7 +29,6 @@ interface DashboardMetrics {
   failed_calls: number;
   avg_duration: number;
   completion_rate: number;
-  total_cost_cents: number;
 }
 
 export default async function DashboardPage() {
@@ -47,6 +46,20 @@ export default async function DashboardPage() {
   // Fetch data globally for the user
   const metricsResult = await getCallMetrics(session.user.id);
   const recentCallsResult = await getRecentCalls(session.user.id, 10);
+  const subscription = await getActiveSubscription(session.user.id);
+
+  let remainingMinutes = 0;
+  if (subscription?.status === 'active' && subscription.total_minutes) {
+    const { rows } = await sql<{ sum: number }>`
+      SELECT COALESCE(SUM(duration), 0)::int as sum
+      FROM calls
+      WHERE user_id = ${session.user.id}
+        AND call_date >= ${subscription.start_date}
+    `;
+
+    const usedMinutes = Math.ceil((rows[0]?.sum || 0) / 60000);
+    remainingMinutes = Math.max(0, Number(subscription.total_minutes) - usedMinutes);
+  }
 
   // Extract metrics with fallback values
   const metrics: DashboardMetrics = metricsResult.success && metricsResult.data
@@ -58,7 +71,6 @@ export default async function DashboardPage() {
       failed_calls: 0,
       avg_duration: 0,
       completion_rate: 0,
-      total_cost_cents: 0,
     };
 
   // Extract recent calls with fallback
@@ -157,12 +169,12 @@ export default async function DashboardPage() {
             />
 
             <MetricCard
-              title="Total Cost"
-              value={`$${(metrics.total_cost_cents / 100).toFixed(2)}`}
-              subtitle="All time"
+              title="Kalan Dakika"
+              value={`${remainingMinutes} dk`}
+              subtitle="Aktif paketten"
               icon={
                 <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               }
               color="cyan"
