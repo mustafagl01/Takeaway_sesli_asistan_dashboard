@@ -33,6 +33,16 @@ interface DateRange {
   endDate: string
 }
 
+interface AnalyticsApiResponse {
+  success: boolean
+  data?: {
+    calls?: Call[]
+    total?: number
+    hasActivePackage?: boolean
+  }
+  error?: string
+}
+
 // ============================================================================
 // Client Component - Analytics Page
 // ============================================================================
@@ -64,6 +74,7 @@ export default function AnalyticsPage() {
 
   // State for call data and filters
   const [calls, setCalls] = useState<Call[]>([])
+  const [hasActivePackage, setHasActivePackage] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -108,10 +119,11 @@ export default function AnalyticsPage() {
         throw new Error('Failed to fetch analytics data')
       }
 
-      const data = await response.json()
+      const data = await response.json() as AnalyticsApiResponse
 
       if (data.success && data.data) {
         setCalls(data.data.calls || [])
+        setHasActivePackage(!!data.data.hasActivePackage)
       } else {
         throw new Error(data.error || 'Failed to fetch analytics data')
       }
@@ -294,7 +306,7 @@ export default function AnalyticsPage() {
 
           {/* Analytics Metrics */}
           {calls.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-8">
+            <div className={`grid grid-cols-2 gap-6 mb-8 ${hasActivePackage ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3 lg:grid-cols-6'}`}>
               <MetricCard
                 title="Total Calls"
                 value={metrics.totalCalls}
@@ -325,21 +337,25 @@ export default function AnalyticsPage() {
                 color="amber"
                 delay={300}
               />
-              <MetricCard
-                title="Total Cost"
-                value={metrics.totalCostCents > 0 ? `$${(metrics.totalCostCents / 100).toFixed(2)}` : 'N/A'}
-                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                color="emerald"
-                delay={400}
-              />
-              <MetricCard
-                title="Cost / Min"
-                value={metrics.costPerMinuteCents > 0 ? `$${(metrics.costPerMinuteCents / 100).toFixed(3)}` : 'N/A'}
-                subtitle="avg per minute"
-                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                color="cyan"
-                delay={500}
-              />
+              {!hasActivePackage && (
+                <MetricCard
+                  title="Total Cost"
+                  value={metrics.totalCostCents > 0 ? `$${(metrics.totalCostCents / 100).toFixed(2)}` : 'N/A'}
+                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                  color="emerald"
+                  delay={400}
+                />
+              )}
+              {!hasActivePackage && (
+                <MetricCard
+                  title="Cost / Min"
+                  value={metrics.costPerMinuteCents > 0 ? `$${(metrics.costPerMinuteCents / 100).toFixed(3)}` : 'N/A'}
+                  subtitle="avg per minute"
+                  icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                  color="cyan"
+                  delay={500}
+                />
+              )}
             </div>
           )}
 
@@ -363,8 +379,8 @@ export default function AnalyticsPage() {
             </div>
           ) : (
             <>
-              <AnalyticsChart calls={calls} />
-              <RecentCallsTable calls={[...calls].sort((a, b) => new Date(b.call_date).getTime() - new Date(a.call_date).getTime()).slice(0, 5)} />
+              <AnalyticsChart calls={calls} hasActivePackage={hasActivePackage} />
+              <RecentCallsTable hasActivePackage={hasActivePackage} calls={[...calls].sort((a, b) => new Date(b.call_date).getTime() - new Date(a.call_date).getTime()).slice(0, 5)} />
             </>
           )}
         </div>
@@ -474,7 +490,7 @@ function MetricCard({ title, value, subtitle, icon, color, delay }: MetricCardPr
   )
 }
 
-function RecentCallsTable({ calls }: { calls: Call[] }) {
+function RecentCallsTable({ calls, hasActivePackage = false }: { calls: Call[], hasActivePackage?: boolean }) {
   const statusConfig: Record<string, { bg: string; text: string; dot: string }> = {
     completed: {
       bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
@@ -525,7 +541,7 @@ function RecentCallsTable({ calls }: { calls: Call[] }) {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date & Time</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Duration</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost</th>
+                {!hasActivePackage && <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost</th>}
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
               </tr>
             </thead>
@@ -540,7 +556,9 @@ function RecentCallsTable({ calls }: { calls: Call[] }) {
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{dateStr} {timeStr}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{call.phone_number}</td>
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{formatDurationFromMilliseconds(call.duration)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{call.call_cost_cents != null ? `$${(call.call_cost_cents / 100).toFixed(2)}` : '-'}</td>
+                    {!hasActivePackage && (
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{call.call_cost_cents != null ? `$${(call.call_cost_cents / 100).toFixed(2)}` : '-'}</td>
+                    )}
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full ${config.bg} ${config.text} border border-current/20`}>
                         <span className={`w-1 h-1 rounded-full ${config.dot}`} />

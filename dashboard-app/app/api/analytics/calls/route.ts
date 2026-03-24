@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
-import { getCallsByDateRange, type Call } from '@/lib/db';
+import { getActiveSubscription, getCallsByDateRange, type Call } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -29,13 +29,18 @@ export async function GET(request: NextRequest) {
     }
 
     const callsResult = await getCallsByDateRange(session.user.id, startDate, endDate);
+    const subscription = await getActiveSubscription(session.user.id);
+    const hasActivePackage = subscription?.status === 'active';
 
     if (!callsResult.success || !callsResult.data) {
       throw new Error(callsResult.error || 'Failed to fetch analytics data');
     }
 
     const calls: Call[] = callsResult.data;
-    return NextResponse.json({ success: true, data: { calls, total: calls.length } }, { status: 200 });
+    return NextResponse.json(
+      { success: true, data: { calls, total: calls.length, hasActivePackage } },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('Analytics API error:', error);
     return NextResponse.json({ success: false, error: 'Failed to fetch analytics data' }, { status: 500 });

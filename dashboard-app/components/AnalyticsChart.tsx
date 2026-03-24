@@ -55,6 +55,7 @@ interface StatusDataPoint {
  */
 export interface AnalyticsChartProps {
   calls: Call[]
+  hasActivePackage?: boolean
 }
 
 // ============================================================================
@@ -208,7 +209,7 @@ function useHourlyData(calls: Call[]): { hour: number; count: number }[] {
 /**
  * Custom tooltip for call volume + cost chart
  */
-function CallVolumeTooltip({ active, payload }: any) {
+function CallVolumeTooltip({ active, payload, hasActivePackage = false }: any) {
   if (active && payload && payload.length) {
     const p = payload[0].payload
     return (
@@ -217,9 +218,11 @@ function CallVolumeTooltip({ active, payload }: any) {
         <p className="text-sm text-gray-600 dark:text-gray-400">
           Calls: <span className="font-semibold text-blue-600 dark:text-blue-400">{p.calls}</span>
         </p>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Cost: <span className="font-semibold text-green-600 dark:text-green-400">${(p.costCents / 100).toFixed(2)}</span>
-        </p>
+        {!hasActivePackage && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Cost: <span className="font-semibold text-green-600 dark:text-green-400">${(p.costCents / 100).toFixed(2)}</span>
+          </p>
+        )}
       </div>
     )
   }
@@ -305,7 +308,7 @@ function HeatmapGrid({ hourlyData }: { hourlyData: { hour: number; count: number
  * <AnalyticsChart calls={calls} />
  * ```
  */
-export default function AnalyticsChart({ calls }: AnalyticsChartProps) {
+export default function AnalyticsChart({ calls, hasActivePackage = false }: AnalyticsChartProps) {
   const callVolumeData = useCallVolumeData(calls)
   const outcomeData = useOutcomeDistributionData(calls)
   const statusData = useStatusDistributionData(calls)
@@ -333,25 +336,29 @@ export default function AnalyticsChart({ calls }: AnalyticsChartProps) {
                 tick={{ fill: 'currentColor' }}
               />
               <YAxis yAxisId="left" className="text-sm text-gray-600 dark:text-gray-400" tick={{ fill: 'currentColor' }} />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                tickFormatter={(v) => `$${(v / 100).toFixed(2)}`}
-                className="text-sm text-gray-600 dark:text-gray-400"
-                tick={{ fill: 'currentColor' }}
-              />
-              <Tooltip content={<CallVolumeTooltip />} />
+              {!hasActivePackage && (
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tickFormatter={(v) => `$${(v / 100).toFixed(2)}`}
+                  className="text-sm text-gray-600 dark:text-gray-400"
+                  tick={{ fill: 'currentColor' }}
+                />
+              )}
+              <Tooltip content={<CallVolumeTooltip hasActivePackage={hasActivePackage} />} />
               <Legend wrapperStyle={{ paddingTop: '10px' }} iconType="circle" />
               <Bar dataKey="calls" yAxisId="left" fill="#3b82f6" opacity={0.8} name="Calls" />
-              <Line
-                type="monotone"
-                dataKey="costCents"
-                yAxisId="right"
-                stroke="#10b981"
-                strokeWidth={2}
-                dot={false}
-                name="Cost ($)"
-              />
+              {!hasActivePackage && (
+                <Line
+                  type="monotone"
+                  dataKey="costCents"
+                  yAxisId="right"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Cost ($)"
+                />
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         ) : (
