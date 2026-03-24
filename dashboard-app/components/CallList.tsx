@@ -1,9 +1,9 @@
-'use client'
+"use client";
 
-import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
-import type { Call } from '@/lib/db'
-import { formatDurationFromMilliseconds } from '@/lib/duration'
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import type { Call } from "@/lib/db";
+import { formatDurationFromMilliseconds } from "@/lib/duration";
 
 // ============================================================================
 // Type Definitions
@@ -13,25 +13,25 @@ import { formatDurationFromMilliseconds } from '@/lib/duration'
  * Call filter options
  */
 export interface CallFilters {
-  startDate?: string
-  endDate?: string
-  status?: string
-  phoneNumber?: string
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  phoneNumber?: string;
 }
 
 /**
  * Pagination state
  */
 interface PaginationState {
-  page: number
-  limit: number
-  total: number
+  page: number;
+  limit: number;
+  total: number;
 }
 
 interface CallsApiResponse {
-  calls: Call[]
-  total: number
-  totalCostCents: number
+  calls: Call[];
+  total: number;
+  totalCostCents: number;
 }
 
 /**
@@ -42,11 +42,12 @@ interface CallsApiResponse {
  * @param userId - User ID for fetching filtered calls
  */
 export interface CallListProps {
-  initialCalls: Call[]
-  initialTotal: number
+  initialCalls: Call[];
+  initialTotal: number;
   /** Total cost in cents (all or filtered); shown above table */
-  initialTotalCostCents?: number
-  userId: string
+  initialTotalCostCents?: number;
+  hasActivePackage?: boolean;
+  userId: string;
 }
 
 async function fetchCallsFromApi(
@@ -54,50 +55,53 @@ async function fetchCallsFromApi(
   page: number,
   limit: number,
   filters: CallFilters,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<CallsApiResponse> {
   const params = new URLSearchParams({
     userId,
     limit: limit.toString(),
     offset: ((page - 1) * limit).toString(),
-  })
+  });
 
   if (filters.startDate) {
-    params.append('startDate', filters.startDate)
+    params.append("startDate", filters.startDate);
   }
 
   if (filters.endDate) {
-    params.append('endDate', filters.endDate)
+    params.append("endDate", filters.endDate);
   }
 
   if (filters.status) {
-    params.append('status', filters.status)
+    params.append("status", filters.status);
   }
 
   if (filters.phoneNumber) {
-    params.append('phoneNumber', filters.phoneNumber)
+    params.append("phoneNumber", filters.phoneNumber);
   }
 
   const response = await fetch(`/api/calls?${params.toString()}`, {
-    cache: 'no-store',
+    cache: "no-store",
     signal,
-  })
+  });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch calls')
+    throw new Error("Failed to fetch calls");
   }
 
-  const data = await response.json()
+  const data = await response.json();
 
   if (!data.success) {
-    throw new Error(data.error || 'Failed to fetch calls')
+    throw new Error(data.error || "Failed to fetch calls");
   }
 
   return {
     calls: data.data.calls,
     total: data.data.total,
-    totalCostCents: typeof data.data.totalCostCents === 'number' ? data.data.totalCostCents : 0,
-  }
+    totalCostCents:
+      typeof data.data.totalCostCents === "number"
+        ? data.data.totalCostCents
+        : 0,
+  };
 }
 
 // ============================================================================
@@ -130,195 +134,216 @@ async function fetchCallsFromApi(
  * />
  * ```
  */
-export default function CallList({ initialCalls, initialTotal, initialTotalCostCents = 0, userId }: CallListProps) {
+export default function CallList({
+  initialCalls,
+  initialTotal,
+  initialTotalCostCents = 0,
+  hasActivePackage = false,
+  userId,
+}: CallListProps) {
   // State management
-  const [calls, setCalls] = useState<Call[]>(initialCalls)
+  const [calls, setCalls] = useState<Call[]>(initialCalls);
   const [pagination, setPagination] = useState<PaginationState>({
     page: 1,
     limit: 25,
     total: initialTotal,
-  })
-  const [filters, setFilters] = useState<CallFilters>({})
-  const [totalCostCents, setTotalCostCents] = useState<number>(initialTotalCostCents)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const requestInFlightRef = useRef(false)
+  });
+  const [filters, setFilters] = useState<CallFilters>({});
+  const [totalCostCents, setTotalCostCents] = useState<number>(
+    initialTotalCostCents,
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestInFlightRef = useRef(false);
 
   // Form state for filters
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [status, setStatus] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState('')
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [status, setStatus] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
 
   /**
    * Apply filters and reset to first page
    */
   const handleApplyFilters = () => {
-    const newFilters: CallFilters = {}
+    const newFilters: CallFilters = {};
 
     if (startDate) {
-      newFilters.startDate = startDate
+      newFilters.startDate = startDate;
     }
 
     if (endDate) {
-      newFilters.endDate = endDate
+      newFilters.endDate = endDate;
     }
 
     if (status) {
-      newFilters.status = status
+      newFilters.status = status;
     }
 
     if (phoneNumber) {
-      newFilters.phoneNumber = phoneNumber
+      newFilters.phoneNumber = phoneNumber;
     }
 
-    setFilters(newFilters)
-    setPagination((prev) => ({ ...prev, page: 1 }))
-  }
+    setFilters(newFilters);
+    setPagination((prev) => ({ ...prev, page: 1 }));
+  };
 
   /**
    * Clear all filters
    */
   const handleClearFilters = () => {
-    setStartDate('')
-    setEndDate('')
-    setStatus('')
-    setPhoneNumber('')
-    setFilters({})
-    setPagination((prev) => ({ ...prev, page: 1 }))
-  }
+    setStartDate("");
+    setEndDate("");
+    setStatus("");
+    setPhoneNumber("");
+    setFilters({});
+    setPagination((prev) => ({ ...prev, page: 1 }));
+  };
 
   /**
    * Handle page change
    */
   const handlePageChange = (newPage: number) => {
-    setPagination((prev) => ({ ...prev, page: newPage }))
-  }
+    setPagination((prev) => ({ ...prev, page: newPage }));
+  };
 
   /**
    * Fetch calls when pagination or filters change (including when filters are cleared)
    */
   useEffect(() => {
-    const controller = new AbortController()
-    let isMounted = true
+    const controller = new AbortController();
+    let isMounted = true;
 
     const loadCalls = async () => {
       if (requestInFlightRef.current) {
-        return
+        return;
       }
 
-      requestInFlightRef.current = true
+      requestInFlightRef.current = true;
 
       try {
-        setIsLoading(true)
-        setError(null)
+        setIsLoading(true);
+        setError(null);
 
         const data = await fetchCallsFromApi(
           userId,
           pagination.page,
           pagination.limit,
           filters,
-          controller.signal
-        )
+          controller.signal,
+        );
 
         if (!isMounted) {
-          return
+          return;
         }
 
-        setCalls(data.calls)
-        setPagination((prev) => ({ ...prev, total: data.total }))
-        setTotalCostCents(data.totalCostCents)
+        setCalls(data.calls);
+        setPagination((prev) => ({ ...prev, total: data.total }));
+        setTotalCostCents(data.totalCostCents);
       } catch (err) {
         if (!isMounted || controller.signal.aborted) {
-          return
+          return;
         }
 
-        setError(err instanceof Error ? err.message : 'An error occurred')
-        setCalls([])
+        setError(err instanceof Error ? err.message : "An error occurred");
+        setCalls([]);
       } finally {
-        requestInFlightRef.current = false
+        requestInFlightRef.current = false;
         if (isMounted) {
-          setIsLoading(false)
+          setIsLoading(false);
         }
       }
-    }
+    };
 
-    void loadCalls()
+    void loadCalls();
 
     return () => {
-      isMounted = false
-      controller.abort()
-    }
-  }, [filters, pagination.limit, pagination.page, userId])
+      isMounted = false;
+      controller.abort();
+    };
+  }, [filters, pagination.limit, pagination.page, userId]);
 
   useEffect(() => {
-    let isMounted = true
+    let isMounted = true;
 
     const pollCalls = async () => {
       if (document.hidden || requestInFlightRef.current) {
-        return
+        return;
       }
 
-      requestInFlightRef.current = true
+      requestInFlightRef.current = true;
 
       try {
         const data = await fetchCallsFromApi(
           userId,
           pagination.page,
           pagination.limit,
-          filters
-        )
+          filters,
+        );
 
         if (!isMounted) {
-          return
+          return;
         }
 
-        setCalls(data.calls)
-        setPagination((prev) => ({ ...prev, total: data.total }))
-        setTotalCostCents(data.totalCostCents)
-        setError(null)
+        setCalls(data.calls);
+        setPagination((prev) => ({ ...prev, total: data.total }));
+        setTotalCostCents(data.totalCostCents);
+        setError(null);
       } catch (err) {
         if (!isMounted) {
-          return
+          return;
         }
 
-        setError(err instanceof Error ? err.message : 'An error occurred')
+        setError(err instanceof Error ? err.message : "An error occurred");
       } finally {
-        requestInFlightRef.current = false
+        requestInFlightRef.current = false;
       }
-    }
+    };
 
     const intervalId = window.setInterval(() => {
-      void pollCalls()
-    }, 10000)
+      void pollCalls();
+    }, 10000);
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        void pollCalls()
+        void pollCalls();
       }
-    }
+    };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange)
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      isMounted = false
-      window.clearInterval(intervalId)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [filters, pagination.limit, pagination.page, userId])
+      isMounted = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [filters, pagination.limit, pagination.page, userId]);
 
   // Calculate pagination info
-  const totalPages = Math.ceil(pagination.total / pagination.limit)
-  const startIndex = (pagination.page - 1) * pagination.limit + 1
-  const endIndex = Math.min(startIndex + pagination.limit - 1, pagination.total)
+  const totalPages = Math.ceil(pagination.total / pagination.limit);
+  const startIndex = (pagination.page - 1) * pagination.limit + 1;
+  const endIndex = Math.min(
+    startIndex + pagination.limit - 1,
+    pagination.total,
+  );
 
   return (
     <div className="space-y-6">
       {/* Filters Section */}
       <div className="glass-card rounded-2xl p-6 animate-fade-in-up">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          <svg
+            className="w-5 h-5 text-indigo-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+            />
           </svg>
           Filters
         </h3>
@@ -326,7 +351,10 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Start Date */}
           <div>
-            <label htmlFor="start-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="start-date"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Start Date
             </label>
             <input
@@ -341,7 +369,10 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
 
           {/* End Date */}
           <div>
-            <label htmlFor="end-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="end-date"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               End Date
             </label>
             <input
@@ -356,7 +387,10 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
 
           {/* Status Filter */}
           <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="status"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Status
             </label>
             <select
@@ -377,7 +411,10 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
 
           {/* Phone Number Search */}
           <div>
-            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="phone"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Phone Number
             </label>
             <input
@@ -399,7 +436,7 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
             disabled={isLoading}
             className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 disabled:from-gray-400 disabled:to-gray-500 text-white font-medium rounded-xl transition-all shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 disabled:shadow-none disabled:cursor-not-allowed"
           >
-            {isLoading ? 'Applying...' : 'Apply Filters'}
+            {isLoading ? "Applying..." : "Apply Filters"}
           </button>
           <button
             onClick={handleClearFilters}
@@ -422,25 +459,44 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
         </div>
       )}
 
-      {/* Total cost card */}
-      <div className="glass-card rounded-2xl p-5 flex items-center justify-between animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
-            <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+      {!hasActivePackage && (
+        <div
+          className="glass-card rounded-2xl p-5 flex items-center justify-between animate-fade-in-up"
+          style={{ animationDelay: "100ms" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20">
+              <svg
+                className="w-5 h-5 text-emerald-600 dark:text-emerald-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {Object.keys(filters).length > 0
+                ? "Total cost (filtered)"
+                : "Total cost (all time)"}
+            </span>
           </div>
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {Object.keys(filters).length > 0 ? 'Total cost (filtered)' : 'Total cost (all time)'}
+          <span className="metric-card-value text-2xl">
+            £{(totalCostCents / 100).toFixed(2)}
           </span>
         </div>
-        <span className="metric-card-value text-2xl">
-          £{(totalCostCents / 100).toFixed(2)}
-        </span>
-      </div>
+      )}
 
       {/* Calls Table */}
-      <div className="glass-card rounded-2xl overflow-hidden animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+      <div
+        className="glass-card rounded-2xl overflow-hidden animate-fade-in-up"
+        style={{ animationDelay: "200ms" }}
+      >
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-200/50 dark:border-gray-700/50">
@@ -457,9 +513,11 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Cost
-                </th>
+                {!hasActivePackage && (
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Cost
+                  </th>
+                )}
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -468,28 +526,55 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
             <tbody className="divide-y divide-gray-200/50 dark:divide-gray-700/50">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td
+                    colSpan={hasActivePackage ? 5 : 6}
+                    className="px-6 py-12 text-center"
+                  >
                     <div className="flex flex-col items-center">
                       <div className="inline-block h-10 w-10 animate-spin rounded-full border-4 border-solid border-indigo-500 border-r-transparent"></div>
-                      <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading calls...</p>
+                      <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                        Loading calls...
+                      </p>
                     </div>
                   </td>
                 </tr>
               ) : calls.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center">
+                  <td
+                    colSpan={hasActivePackage ? 5 : 6}
+                    className="px-6 py-16 text-center"
+                  >
                     <div className="flex flex-col items-center">
                       <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 mb-4">
-                        <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        <svg
+                          className="w-8 h-8 text-indigo-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                          />
                         </svg>
                       </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No calls found matching your filters</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        No calls found matching your filters
+                      </p>
                     </div>
                   </td>
                 </tr>
               ) : (
-                calls.map((call, index) => <CallRow key={call.id} call={call} index={index} />)
+                calls.map((call, index) => (
+                  <CallRow
+                    key={call.id}
+                    call={call}
+                    index={index}
+                    hasActivePackage={hasActivePackage}
+                  />
+                ))
               )}
             </tbody>
           </table>
@@ -500,9 +585,19 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
           <div className="bg-gray-50/50 dark:bg-gray-800/50 px-6 py-4 flex items-center justify-between border-t border-gray-200/50 dark:border-gray-700/50">
             {/* Pagination Info */}
             <div className="text-sm text-gray-700 dark:text-gray-300">
-              Showing <span className="font-semibold text-gray-900 dark:text-white">{startIndex}</span> to{' '}
-              <span className="font-semibold text-gray-900 dark:text-white">{endIndex}</span> of{' '}
-              <span className="font-semibold text-gray-900 dark:text-white">{pagination.total}</span> calls
+              Showing{" "}
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {startIndex}
+              </span>{" "}
+              to{" "}
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {endIndex}
+              </span>{" "}
+              of{" "}
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {pagination.total}
+              </span>{" "}
+              calls
             </div>
 
             {/* Pagination Buttons */}
@@ -526,7 +621,7 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // ============================================================================
@@ -537,8 +632,9 @@ export default function CallList({ initialCalls, initialTotal, initialTotalCostC
  * Call Row Props
  */
 interface CallRowProps {
-  call: Call
-  index: number
+  call: Call;
+  index: number;
+  hasActivePackage?: boolean;
 }
 
 /**
@@ -549,56 +645,66 @@ interface CallRowProps {
  * @param props - Call row props
  * @returns Call row JSX
  */
-function CallRow({ call, index }: CallRowProps) {
+function CallRow({ call, index, hasActivePackage = false }: CallRowProps) {
   // Format call date
-  const callDate = new Date(call.call_date)
-  const formattedDate = callDate.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-  const formattedTime = callDate.toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const callDate = new Date(call.call_date);
+  const formattedDate = callDate.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const formattedTime = callDate.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   // Status badge config
-  const statusConfig: Record<string, { bg: string; text: string; dot: string }> = {
+  const statusConfig: Record<
+    string,
+    { bg: string; text: string; dot: string }
+  > = {
     completed: {
-      bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
-      text: 'text-emerald-700 dark:text-emerald-400',
-      dot: 'bg-emerald-500',
+      bg: "bg-emerald-500/10 dark:bg-emerald-500/20",
+      text: "text-emerald-700 dark:text-emerald-400",
+      dot: "bg-emerald-500",
     },
     missed: {
-      bg: 'bg-amber-500/10 dark:bg-amber-500/20',
-      text: 'text-amber-700 dark:text-amber-400',
-      dot: 'bg-amber-500',
+      bg: "bg-amber-500/10 dark:bg-amber-500/20",
+      text: "text-amber-700 dark:text-amber-400",
+      dot: "bg-amber-500",
     },
     failed: {
-      bg: 'bg-red-500/10 dark:bg-red-500/20',
-      text: 'text-red-700 dark:text-red-400',
-      dot: 'bg-red-500',
+      bg: "bg-red-500/10 dark:bg-red-500/20",
+      text: "text-red-700 dark:text-red-400",
+      dot: "bg-red-500",
     },
     in_progress: {
-      bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
-      text: 'text-indigo-700 dark:text-indigo-400',
-      dot: 'bg-indigo-500',
+      bg: "bg-indigo-500/10 dark:bg-indigo-500/20",
+      text: "text-indigo-700 dark:text-indigo-400",
+      dot: "bg-indigo-500",
     },
     cancelled: {
-      bg: 'bg-gray-500/10 dark:bg-gray-500/20',
-      text: 'text-gray-700 dark:text-gray-400',
-      dot: 'bg-gray-500',
+      bg: "bg-gray-500/10 dark:bg-gray-500/20",
+      text: "text-gray-700 dark:text-gray-400",
+      dot: "bg-gray-500",
     },
-  }
+  };
 
-  const config = statusConfig[call.status] || statusConfig.cancelled
+  const config = statusConfig[call.status] || statusConfig.cancelled;
 
   return (
-    <tr className="hover:bg-indigo-500/5 dark:hover:bg-indigo-500/10 transition-colors opacity-0 animate-fade-in" style={{ animationDelay: `${300 + index * 30}ms` }}>
+    <tr
+      className="hover:bg-indigo-500/5 dark:hover:bg-indigo-500/10 transition-colors opacity-0 animate-fade-in"
+      style={{ animationDelay: `${300 + index * 30}ms` }}
+    >
       {/* Date & Time */}
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm font-medium text-gray-900 dark:text-white">{formattedDate}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">{formattedTime}</div>
+        <div className="text-sm font-medium text-gray-900 dark:text-white">
+          {formattedDate}
+        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          {formattedTime}
+        </div>
       </td>
 
       {/* Phone Number */}
@@ -617,18 +723,25 @@ function CallRow({ call, index }: CallRowProps) {
 
       {/* Status */}
       <td className="px-6 py-4 whitespace-nowrap">
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full ${config.bg} ${config.text} border border-current/20`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${config.dot} animate-pulse`} />
-          {call.status.replace('_', ' ')}
+        <span
+          className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full ${config.bg} ${config.text} border border-current/20`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${config.dot} animate-pulse`}
+          />
+          {call.status.replace("_", " ")}
         </span>
       </td>
 
-      {/* Cost */}
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-          {call.customer_cost_cents != null ? `£${(call.customer_cost_cents / 100).toFixed(2)}` : '-'}
-        </div>
-      </td>
+      {!hasActivePackage && (
+        <td className="px-6 py-4 whitespace-nowrap">
+          <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+            {call.customer_cost_cents != null
+              ? `£${(call.customer_cost_cents / 100).toFixed(2)}`
+              : "-"}
+          </div>
+        </td>
+      )}
 
       {/* Actions */}
       <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -637,11 +750,21 @@ function CallRow({ call, index }: CallRowProps) {
           className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium transition-colors"
         >
           View Details
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5l7 7-7 7"
+            />
           </svg>
         </Link>
       </td>
     </tr>
-  )
+  );
 }

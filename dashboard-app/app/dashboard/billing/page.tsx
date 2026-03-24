@@ -4,6 +4,7 @@ import PricingSlider from '@/components/PricingSlider';
 import PricingTiers from '@/components/PricingTiers';
 import ActiveSubscriptionWidget from '@/components/ActiveSubscriptionWidget';
 import { getActiveSubscription } from '@/lib/db';
+import { sql } from '@vercel/postgres';
 
 export default async function BillingPage() {
     const session = await auth();
@@ -13,7 +14,25 @@ export default async function BillingPage() {
     }
 
     const subscription = await getActiveSubscription(session.user.id);
-    const hasActivePackage = subscription?.status === 'active';
+
+    let remainingMinutes = 0;
+    if (subscription?.status === 'active' && subscription.total_minutes) {
+        const { rows } = await sql<{ sum: number }>`
+            SELECT COALESCE(SUM(duration), 0)::int as sum
+            FROM calls
+            WHERE user_id = ${session.user.id}
+              AND call_date >= ${subscription.start_date}
+        `;
+
+        const usedMinutes = Math.ceil((rows[0]?.sum || 0) / 60000);
+        remainingMinutes = Math.max(0, Number(subscription.total_minutes) - usedMinutes);
+    }
+
+    const isPackageLow = subscription?.status === 'active' && subscription.total_minutes
+        ? remainingMinutes < (Number(subscription.total_minutes) * 0.2) || remainingMinutes < 50
+        : false;
+
+    const showPricing = !subscription || subscription.status !== 'active' || isPackageLow;
 
     return (
         <>
@@ -56,7 +75,7 @@ export default async function BillingPage() {
                         <ActiveSubscriptionWidget />
                     </div>
 
-                    {hasActivePackage ? (
+                    {!showPricing ? (
                         <div className="mb-16 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
                             <div className="max-w-3xl mx-auto rounded-2xl border border-indigo-200/60 dark:border-indigo-700/60 bg-indigo-50/70 dark:bg-indigo-950/20 p-6 text-center">
                                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">

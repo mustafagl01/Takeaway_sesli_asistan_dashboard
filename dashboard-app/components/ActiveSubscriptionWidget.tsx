@@ -124,9 +124,6 @@ export default function ActiveSubscriptionWidget() {
               <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <span className="text-2xl">⚡</span> {subscription.plan_name}
               </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Birim Fiyat: {subscription.rate_pence}p / dk
-              </p>
             </div>
             <div className="text-right">
               <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Durum</div>
@@ -170,7 +167,7 @@ export default function ActiveSubscriptionWidget() {
             Siradaki Paket
           </div>
           <div className="text-sm text-gray-800 dark:text-gray-100">
-            {queuedPackage.plan_name} | {queuedPackage.total_minutes} dk | {queuedPackage.rate_pence}p/dk
+            {queuedPackage.plan_name} | {queuedPackage.total_minutes} dk
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
             Aktif paketiniz biter bitmez otomatik devreye girer.
