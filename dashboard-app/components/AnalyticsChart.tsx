@@ -2,17 +2,12 @@
 
 import { useMemo } from 'react'
 import {
-  ComposedChart,
+  BarChart,
   Bar,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts'
 import type { Call } from '@/lib/db'
@@ -21,177 +16,38 @@ import type { Call } from '@/lib/db'
 // Type Definitions
 // ============================================================================
 
-/**
- * Chart data point for call volume and cost over time
- */
-interface CallVolumeDataPoint {
-  date: string
-  calls: number
-  costCents: number
-}
-
-/**
- * Chart data point for outcome distribution
- */
-interface OutcomeDataPoint {
-  name: string
-  value: number
-  color: string
-}
-
-/**
- * Chart data point for status distribution
- */
-interface StatusDataPoint {
-  name: string
-  value: number
-  color: string
-}
-
-/**
- * Analytics Chart Props
- *
- * @param calls - Array of call records to visualize
- */
-export interface AnalyticsChartProps {
+interface AnalyticsChartProps {
   calls: Call[]
   hasActivePackage?: boolean
 }
 
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Format date to short format (DD MMM)
- * @param dateString - ISO date string
- * @returns Formatted date string
- */
 function formatShortDate(dateString: string): string {
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })
 }
 
-/**
- * Format date to long format (DD MMM YYYY)
- * @param dateString - ISO date string
- * @returns Formatted date string
- */
-function formatLongDate(dateString: string): string {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-// ============================================================================
-// Data Processing Hooks
-// ============================================================================
-
-/**
- * Process call data to generate call volume and cost over time chart data
- * Groups calls by date, counts them and sums cost per day
- */
-function useCallVolumeData(calls: Call[]): CallVolumeDataPoint[] {
+function useCallVolumeData(calls: Call[]) {
   return useMemo(() => {
-    const byDate: Record<string, { calls: number; costCents: number }> = {}
+    const byDate: Record<string, number> = {}
 
     calls.forEach((call) => {
       const date = new Date(call.call_date).toISOString().split('T')[0]
-      if (!byDate[date]) byDate[date] = { calls: 0, costCents: 0 }
-      byDate[date].calls += 1
-      byDate[date].costCents += call.call_cost_cents ?? 0
+      if (!byDate[date]) byDate[date] = 0
+      byDate[date] += 1
     })
 
     const sortedData = Object.entries(byDate)
-      .map(([date, { calls: count, costCents }]) => ({ date, calls: count, costCents }))
+      .map(([date, count]) => ({ date, calls: count }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
     return sortedData.map((point) => ({
       date: formatShortDate(point.date),
       calls: point.calls,
-      costCents: point.costCents,
     }))
   }, [calls])
 }
 
-/**
- * Process call data to generate outcome distribution chart data
- * Groups calls by outcome type and counts them
- */
-function useOutcomeDistributionData(calls: Call[]): OutcomeDataPoint[] {
-  return useMemo(() => {
-    // Define outcome colors
-    const colorMap: Record<string, string> = {
-      order_placed: '#10b981', // green
-      inquiry: '#3b82f6', // blue
-      complaint: '#ef4444', // red
-      voicemail: '#f59e0b', // amber
-      wrong_number: '#6b7280', // gray
-      other: '#8b5cf6', // purple
-    }
-
-    // Group calls by outcome
-    const outcomeCounts: Record<string, number> = {}
-    const otherOutcomes: Record<string, number> = {}
-
-    calls.forEach((call) => {
-      const outcome = call.outcome || 'unknown'
-
-      if (colorMap[outcome]) {
-        outcomeCounts[outcome] = (outcomeCounts[outcome] || 0) + 1
-      } else {
-        otherOutcomes[outcome] = (otherOutcomes[outcome] || 0) + 1
-      }
-    })
-
-    // Combine "other" outcomes if any exist
-    if (Object.keys(otherOutcomes).length > 0) {
-      outcomeCounts.other = Object.values(otherOutcomes).reduce((sum, count) => sum + count, 0)
-    }
-
-    // Convert to array
-    return Object.entries(outcomeCounts)
-      .map(([name, value]) => ({
-        name: name.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-        value,
-        color: colorMap[name] || colorMap.other,
-      }))
-      .sort((a, b) => b.value - a.value)
-  }, [calls])
-}
-
-/**
- * Process call data by status for donut (completed, missed, failed, other)
- */
-function useStatusDistributionData(calls: Call[]): StatusDataPoint[] {
-  return useMemo(() => {
-    const colorMap: Record<string, string> = {
-      completed: '#10b981',
-      missed: '#f59e0b',
-      failed: '#ef4444',
-    }
-    const statusCounts: Record<string, number> = {}
-    calls.forEach((call) => {
-      const status = call.status || 'unknown'
-      const key = colorMap[status] ? status : 'other'
-      statusCounts[key] = (statusCounts[key] || 0) + 1
-    })
-    if (!statusCounts.other) statusCounts.other = 0
-    const otherColor = '#6b7280'
-    return Object.entries(statusCounts)
-      .map(([name, value]) => ({
-        name: name.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-        value,
-        color: colorMap[name] || otherColor,
-      }))
-      .filter((d) => d.value > 0)
-      .sort((a, b) => b.value - a.value)
-  }, [calls])
-}
-
-/**
- * Hourly call counts for heatmap (0–23)
- */
-function useHourlyData(calls: Call[]): { hour: number; count: number }[] {
+function useHourlyData(calls: Call[]) {
   return useMemo(() => {
     const counts: number[] = Array(24).fill(0)
     calls.forEach((call) => {
@@ -206,43 +62,18 @@ function useHourlyData(calls: Call[]): { hour: number; count: number }[] {
 // Custom Tooltip Components
 // ============================================================================
 
-/**
- * Custom tooltip for call volume + cost chart
- */
-function CallVolumeTooltip({ active, payload, hasActivePackage = false }: any) {
+function CallVolumeTooltip({ active, payload }: any) {
   if (active && payload && payload.length) {
     const p = payload[0].payload
     return (
-      <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-        <p className="text-sm font-medium text-gray-900 dark:text-white">{p.date}</p>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Calls: <span className="font-semibold text-blue-600 dark:text-blue-400">{p.calls}</span>
-        </p>
-        {!hasActivePackage && (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Cost: <span className="font-semibold text-green-600 dark:text-green-400">${(p.costCents / 100).toFixed(2)}</span>
+      <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md p-4 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700">
+        <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">{p.date}</p>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            Yanıtlanan: <span className="font-bold text-indigo-600 dark:text-indigo-400">{p.calls} </span>
           </p>
-        )}
-      </div>
-    )
-  }
-  return null
-}
-
-/**
- * Custom tooltip for outcome distribution chart
- */
-function OutcomeTooltip({ active, payload }: any) {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload
-    return (
-      <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-        <p className="text-sm font-medium text-gray-900 dark:text-white">
-          {data.name}
-        </p>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Count: <span className="font-semibold" style={{ color: data.color }}>{data.value}</span>
-        </p>
+        </div>
       </div>
     )
   }
@@ -253,34 +84,65 @@ function OutcomeTooltip({ active, payload }: any) {
 // Heatmap Subcomponent
 // ============================================================================
 
-function getHourBoxClass(count: number): string {
-  if (count === 0) return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-  if (count === 1) return 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-200'
-  if (count <= 3) return 'bg-blue-300 dark:bg-blue-700 text-blue-900 dark:text-blue-100'
-  if (count <= 6) return 'bg-blue-500 dark:bg-blue-500 text-white'
-  return 'bg-blue-700 dark:bg-blue-300 text-white'
+function getHourBoxStyle(count: number, maxCount: number): React.CSSProperties {
+  if (count === 0) return {}
+  const intensity = Math.max(0.1, count / maxCount)
+  return {
+    backgroundColor: `rgba(99, 102, 241, ${intensity})`,
+    color: intensity > 0.5 ? '#fff' : 'currentColor'
+  }
 }
 
 function HeatmapGrid({ hourlyData }: { hourlyData: { hour: number; count: number }[] }) {
   const busiest = hourlyData.reduce((best, cur) => (cur.count > best.count ? cur : best), { hour: 0, count: 0 })
+  const maxCount = busiest.count || 1
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-1">
-        {hourlyData.map(({ hour, count }) => (
+    <div className="glass-card rounded-2xl p-6 md:p-8 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+        <div>
+          <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300">
+            En Yoğun Saatler
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Müşterilerinizin sizi en çok aradığı saat dilimleri
+          </p>
+        </div>
+        {busiest.count > 0 && (
+          <div className="flex flex-col items-end">
+            <span className="text-xs uppercase tracking-wider font-semibold text-indigo-500 mb-1">Zirve Saati</span>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              {busiest.hour.toString().padStart(2, '0')}:00 
+              <span className="text-sm font-medium px-2 py-1 rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                {busiest.count} Çağrı
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-6 md:grid-cols-12 gap-2 md:gap-3">
+        {hourlyData.map(({ hour, count }, idx) => (
           <div
             key={hour}
-            title={`${hour}:00 — ${count} call${count !== 1 ? 's' : ''}`}
-            className={`w-10 h-10 rounded flex items-center justify-center text-xs font-medium ${getHourBoxClass(count)}`}
+            className="group relative flex flex-col items-center hover:-translate-y-1 transition-transform duration-200"
           >
-            {hour}
+            <div
+              className={`w-full aspect-square rounded-xl flex items-center justify-center text-sm font-medium shadow-sm border border-gray-100 dark:border-gray-800 transition-colors
+                ${count === 0 ? 'bg-gray-50 text-gray-400 dark:bg-gray-800/50 dark:text-gray-500' : ''}`}
+              style={getHourBoxStyle(count, maxCount)}
+            >
+              {hour.toString().padStart(2, '0')}
+            </div>
+            {/* Tooltip on hover */}
+            {count > 0 && (
+              <div className="absolute -top-10 scale-0 group-hover:scale-100 transition-transform bg-gray-900 text-white text-xs py-1 px-2 rounded whitespace-nowrap z-10 pointer-events-none">
+                {count} Çağrı
+              </div>
+            )}
           </div>
         ))}
       </div>
-      {busiest.count > 0 && (
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Busiest hour: <span className="font-semibold text-gray-900 dark:text-white">{busiest.hour}:00</span> ({busiest.count} call{busiest.count !== 1 ? 's' : ''})
-        </p>
-      )}
     </div>
   )
 }
@@ -289,158 +151,68 @@ function HeatmapGrid({ hourlyData }: { hourlyData: { hour: number; count: number
 // Main Component
 // ============================================================================
 
-/**
- * Analytics Chart Component
- *
- * Displays interactive charts for visualizing phone call analytics.
- * Includes a line chart for call volume over time and a pie chart for outcome distribution.
- *
- * Features:
- * - Line chart showing call volume trends over time
- * - Pie chart showing distribution of call outcomes
- * - Interactive tooltips on hover
- * - Responsive design
- * - Dark mode support
- * - Color-coded outcomes
- *
- * @example
- * ```tsx
- * <AnalyticsChart calls={calls} />
- * ```
- */
-export default function AnalyticsChart({ calls, hasActivePackage = false }: AnalyticsChartProps) {
+export default function AnalyticsChart({ calls }: AnalyticsChartProps) {
   const callVolumeData = useCallVolumeData(calls)
-  const outcomeData = useOutcomeDistributionData(calls)
-  const statusData = useStatusDistributionData(calls)
   const hourlyData = useHourlyData(calls)
 
   const hasCallVolumeData = callVolumeData.length > 0
-  const hasOutcomeData = outcomeData.length > 0
-  const hasStatusData = statusData.length > 0
 
   return (
-    <div className="space-y-6">
-      {/* Call Volume Over Time - Line Chart */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Call Volume Over Time
-        </h3>
+    <div className="space-y-8">
+      {/* Call Volume Over Time - Bar Chart */}
+      <div className="glass-card rounded-2xl p-6 md:p-8 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+        <div className="mb-6">
+          <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300">
+            Günlük Çağrı Trendi
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Yapay zekanın sizin yerinize karşıladığı günlük yoğunluk
+          </p>
+        </div>
 
         {hasCallVolumeData ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={callVolumeData} margin={{ top: 5, right: 50, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
-              <XAxis
-                dataKey="date"
-                className="text-sm text-gray-600 dark:text-gray-400"
-                tick={{ fill: 'currentColor' }}
-              />
-              <YAxis yAxisId="left" className="text-sm text-gray-600 dark:text-gray-400" tick={{ fill: 'currentColor' }} />
-              {!hasActivePackage && (
+          <div className="relative h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={callVolumeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorCalls" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.8}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-gray-200 dark:stroke-gray-700" />
+                <XAxis
+                  dataKey="date"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
+                  dy={10}
+                />
                 <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  tickFormatter={(v) => `$${(v / 100).toFixed(2)}`}
-                  className="text-sm text-gray-600 dark:text-gray-400"
-                  tick={{ fill: 'currentColor' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
                 />
-              )}
-              <Tooltip content={<CallVolumeTooltip hasActivePackage={hasActivePackage} />} />
-              <Legend wrapperStyle={{ paddingTop: '10px' }} iconType="circle" />
-              <Bar dataKey="calls" yAxisId="left" fill="#3b82f6" opacity={0.8} name="Calls" />
-              {!hasActivePackage && (
-                <Line
-                  type="monotone"
-                  dataKey="costCents"
-                  yAxisId="right"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  dot={false}
-                  name="Cost ($)"
+                <Tooltip content={<CallVolumeTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
+                <Bar 
+                  dataKey="calls" 
+                  fill="url(#colorCalls)" 
+                  radius={[6, 6, 0, 0]} 
+                  barSize={40}
+                  animationDuration={1500}
                 />
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         ) : (
           <div className="flex items-center justify-center h-[300px] text-gray-500 dark:text-gray-400">
-            <p>No call volume data available</p>
+            <p>Seçili tarih aralığında veri bulunamadı</p>
           </div>
         )}
       </div>
 
       {/* Busiest Hours - Heatmap */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Busiest Hours
-        </h3>
-        <HeatmapGrid hourlyData={hourlyData} />
-      </div>
-
-      {/* Call Breakdown - Two donuts */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Call Breakdown
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* By Status */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">By Status</h4>
-            {hasStatusData ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`status-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<OutcomeTooltip />} />
-                  <Legend iconType="circle" />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[220px] flex items-center justify-center text-gray-500 dark:text-gray-400 text-sm">No data</div>
-            )}
-          </div>
-          {/* By Outcome */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">By Outcome</h4>
-            {hasOutcomeData ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={outcomeData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    dataKey="value"
-                  >
-                    {outcomeData.map((entry, index) => (
-                      <Cell key={`outcome-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<OutcomeTooltip />} />
-                  <Legend iconType="circle" verticalAlign="bottom" height={36} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[220px] flex items-center justify-center text-gray-500 dark:text-gray-400 text-sm">No outcome data</div>
-            )}
-          </div>
-        </div>
-      </div>
+      <HeatmapGrid hourlyData={hourlyData} />
     </div>
   )
 }
