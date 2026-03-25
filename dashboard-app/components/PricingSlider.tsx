@@ -12,8 +12,22 @@ interface BillingStateResponse {
   autoPaygEnabled?: boolean;
 }
 
+interface CheckoutResponse {
+  error?: string;
+  url?: string;
+}
+
+const MIN_MINUTES = 200;
+const MAX_MINUTES = 2000;
+const DEFAULT_MINUTES = 500;
+
+function clampMinutes(value: number): number {
+  return Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, value));
+}
+
 export default function PricingSlider() {
-  const [minutes, setMinutes] = useState(500);
+  const [minutes, setMinutes] = useState(DEFAULT_MINUTES);
+  const [minutesInput, setMinutesInput] = useState(String(DEFAULT_MINUTES));
   const [price, setPrice] = useState(0);
   const [tier, setTier] = useState<'Small' | 'Medium' | 'Pro'>('Medium');
   const [rate, setRate] = useState(0.18);
@@ -31,6 +45,10 @@ export default function PricingSlider() {
     setRate(currentRate);
     setTier(currentTier);
     setPrice(minutes * currentRate);
+  }, [minutes]);
+
+  useEffect(() => {
+    setMinutesInput(String(minutes));
   }, [minutes]);
 
   useEffect(() => {
@@ -67,7 +85,7 @@ export default function PricingSlider() {
         body: JSON.stringify({ minutes }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as CheckoutResponse;
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -84,6 +102,41 @@ export default function PricingSlider() {
       setError(err.message);
       setIsLoading(false);
     }
+  };
+
+  const handleMinutesInputChange = (value: string) => {
+    if (value === '') {
+      setMinutesInput('');
+      return;
+    }
+
+    if (!/^\d+$/.test(value)) {
+      return;
+    }
+
+    setMinutesInput(value);
+
+    const parsedValue = Number(value);
+    if (parsedValue >= MIN_MINUTES && parsedValue <= MAX_MINUTES) {
+      setMinutes(parsedValue);
+    }
+  };
+
+  const commitMinutesInput = () => {
+    if (minutesInput.trim() === '') {
+      setMinutesInput(String(minutes));
+      return;
+    }
+
+    const parsedValue = Number(minutesInput);
+    if (Number.isNaN(parsedValue)) {
+      setMinutesInput(String(minutes));
+      return;
+    }
+
+    const normalizedMinutes = clampMinutes(parsedValue);
+    setMinutes(normalizedMinutes);
+    setMinutesInput(String(normalizedMinutes));
   };
 
   const buttonLabel = hasActivePackage ? 'Siradaki Paketi Satin Al' : 'Secilen Paketi Satin Al';
@@ -127,21 +180,60 @@ export default function PricingSlider() {
         <span className="text-gray-500 dark:text-gray-400 font-medium">toplam</span>
       </div>
 
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="w-full sm:max-w-[220px]">
+          <label
+            htmlFor="minutes-input"
+            className="text-sm font-semibold text-gray-700 dark:text-gray-200"
+          >
+            Dakikayi Klavyeyle Gir
+          </label>
+          <div className="relative mt-2">
+            <input
+              id="minutes-input"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={minutesInput}
+              onChange={(e) => handleMinutesInputChange(e.target.value)}
+              onBlur={commitMinutesInput}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur();
+                }
+              }}
+              disabled={isLoading || hasQueuedPackage}
+              aria-describedby="minutes-input-help"
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 pr-12 text-lg font-semibold text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:ring-blue-900/40"
+            />
+            <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm font-semibold text-gray-400">
+              dk
+            </span>
+          </div>
+        </div>
+        <p
+          id="minutes-input-help"
+          className="text-xs leading-5 text-gray-500 dark:text-gray-400 sm:max-w-xs sm:text-right"
+        >
+          Mobilde daha rahat secim icin dakika degerini elle yazabilir, yine isterse slider ile ince ayar yapabilirsin.
+        </p>
+      </div>
+
       <div className="relative mb-12">
         <input
           type="range"
-          min="200"
-          max="2000"
+          min={String(MIN_MINUTES)}
+          max={String(MAX_MINUTES)}
           step="1"
           value={minutes}
-          onChange={(e) => setMinutes(parseInt(e.target.value, 10))}
+          onChange={(e) => setMinutes(clampMinutes(parseInt(e.target.value, 10)))}
           disabled={isLoading || hasQueuedPackage}
           className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600 disabled:opacity-50"
         />
         <div className="flex justify-between mt-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-          <span>200 DK</span>
+          <span>{MIN_MINUTES} DK</span>
           <span>1100 DK</span>
-          <span>2000 DK</span>
+          <span>{MAX_MINUTES} DK</span>
         </div>
       </div>
 
