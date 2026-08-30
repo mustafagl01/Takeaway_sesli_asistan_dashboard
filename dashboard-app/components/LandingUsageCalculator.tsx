@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import {
   calculateBestMonthlyUsageInPennies,
+  MAX_PACKAGE_MINUTES,
   PLATFORM_MONTHLY_FEE_PENCE,
   PRINTER_ONE_TIME_FEE_PENCE,
 } from '@/lib/pricing';
@@ -35,14 +36,14 @@ export default function LandingUsageCalculator() {
         id="landing-minutes"
         type="range"
         min="0"
-        max="1500"
+        max={MAX_PACKAGE_MINUTES}
         step="25"
         value={minutes}
         onChange={(event) => setMinutes(Number(event.target.value))}
         className="mt-4 w-full accent-[#ffb547]"
       />
       <div className="mt-2 flex justify-between text-xs text-white/40">
-        <span>0 dk</span><span>750 dk</span><span>1.500 dk</span>
+        <span>0 dk</span><span>200 dk</span><span>500 dk</span><span>1.000 dk</span><span>{MAX_PACKAGE_MINUTES.toLocaleString('tr-TR')} dk</span>
       </div>
 
       <div className="mt-8 grid gap-3 sm:grid-cols-3">
