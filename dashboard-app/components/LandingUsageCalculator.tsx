@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  PAYG_RATE_PENCE,
+  calculateBestMonthlyUsageInPennies,
   PLATFORM_MONTHLY_FEE_PENCE,
   PRINTER_ONE_TIME_FEE_PENCE,
 } from '@/lib/pricing';
@@ -13,8 +13,12 @@ function pounds(pence: number): string {
 
 export default function LandingUsageCalculator() {
   const [minutes, setMinutes] = useState(300);
-  const usagePence = useMemo(() => minutes * PAYG_RATE_PENCE, [minutes]);
+  const best = useMemo(() => calculateBestMonthlyUsageInPennies(minutes), [minutes]);
+  const usagePence = best.usagePence;
   const monthlyPence = PLATFORM_MONTHLY_FEE_PENCE + usagePence;
+  const usageLabel = best.packageMinutes
+    ? `${best.packageMinutes.toLocaleString('tr-TR')} dk kontör${best.overageMinutes > 0 ? ` + ${best.overageMinutes} dk PAYG` : ''}`
+    : `${minutes} dk PAYG`;
 
   return (
     <div className="rounded-[28px] bg-[#12221d] p-6 text-white shadow-[0_30px_80px_rgba(18,34,29,0.24)] sm:p-8">
@@ -45,7 +49,7 @@ export default function LandingUsageCalculator() {
 
       <div className="mt-8 grid gap-3 sm:grid-cols-3">
         <PriceCell label="Sabit sistem" value={pounds(PLATFORM_MONTHLY_FEE_PENCE)} />
-        <PriceCell label={`${minutes} dk × ${PAYG_RATE_PENCE}p`} value={pounds(usagePence)} />
+        <PriceCell label={usageLabel} value={pounds(usagePence)} />
         <PriceCell label="Tahmini aylık" value={pounds(monthlyPence)} emphasis />
       </div>
       <p className="mt-5 text-xs leading-5 text-white/55">

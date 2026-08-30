@@ -109,6 +109,38 @@ export function buildPresetPlanName(presetKey: PresetPackageKey, minutes: number
   return `${preset.planName} (${minutes} dk)`;
 }
 
+export function calculateBestMonthlyUsageInPennies(minutes: number): {
+  usagePence: number;
+  packageMinutes: 500 | 1_000 | 2_000 | null;
+  overageMinutes: number;
+} {
+  if (minutes <= 0) {
+    return { usagePence: 0, packageMinutes: null, overageMinutes: 0 };
+  }
+
+  const options: Array<{ packageMinutes: 500 | 1_000 | 2_000 | null }> = [
+    { packageMinutes: null },
+    { packageMinutes: 500 },
+    { packageMinutes: 1_000 },
+    { packageMinutes: 2_000 },
+  ];
+
+  let best = { usagePence: calculateMonthlyUsageInPennies(minutes), packageMinutes: null as 500 | 1_000 | 2_000 | null, overageMinutes: minutes };
+
+  for (const option of options) {
+    if (option.packageMinutes == null) continue;
+    const overageMinutes = Math.max(0, minutes - option.packageMinutes);
+    const usagePence =
+      calculatePackagePriceInPennies(option.packageMinutes) + calculateMonthlyUsageInPennies(overageMinutes);
+
+    if (usagePence < best.usagePence) {
+      best = { usagePence, packageMinutes: option.packageMinutes, overageMinutes };
+    }
+  }
+
+  return best;
+}
+
 export function describePresetRange(presetKey: PresetPackageKey): string {
   const preset = PRESET_PACKAGE_DEFINITIONS[presetKey];
   if (preset.isPayg) {
