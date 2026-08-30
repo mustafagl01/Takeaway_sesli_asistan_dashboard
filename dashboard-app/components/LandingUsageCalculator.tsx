@@ -12,20 +12,18 @@ function pounds(pence: number): string {
   return `£${(pence / 100).toFixed(2)}`;
 }
 
-// Rate boundaries from lib/pricing.ts, positioned to scale on the 0-2000 track.
-const TIER_MARKS = [
-  { minutes: 200, rate: 25 },
-  { minutes: 500, rate: 23 },
-  { minutes: 1_000, rate: 21 },
-  { minutes: MAX_PACKAGE_MINUTES, rate: 20 },
+// Mirrors the rate bands in lib/pricing.ts.
+const TIER_BANDS = [
+  { upTo: 200, rate: 25, label: '0-200 dk' },
+  { upTo: 500, rate: 23, label: '201-500 dk' },
+  { upTo: 1_000, rate: 21, label: '501-1.000 dk' },
+  { upTo: MAX_PACKAGE_MINUTES, rate: 20, label: '1.001-2.000 dk' },
 ];
 
 export default function LandingUsageCalculator() {
   const [minutes, setMinutes] = useState(300);
   const best = useMemo(() => calculateBestMonthlyUsageInPennies(minutes), [minutes]);
-  const usagePence = best.usagePence;
-  const monthlyPence = PLATFORM_MONTHLY_FEE_PENCE + usagePence;
-  const usageLabel = `${minutes} dk × ${best.ratePence}p`;
+  const monthlyPence = PLATFORM_MONTHLY_FEE_PENCE + best.usagePence;
 
   return (
     <div className="rounded-[28px] bg-[#12221d] p-6 text-white shadow-[0_30px_80px_rgba(18,34,29,0.24)] sm:p-8">
@@ -50,44 +48,42 @@ export default function LandingUsageCalculator() {
         onChange={(event) => setMinutes(Number(event.target.value))}
         className="mt-4 w-full accent-[#ffb547]"
       />
-      <div className="relative mt-2 h-8 text-[11px] leading-tight text-white/40">
-        {TIER_MARKS.map((mark) => {
-          const percent = (mark.minutes / MAX_PACKAGE_MINUTES) * 100;
-          const active = best.ratePence === mark.rate;
-          return (
-            <span
-              key={mark.minutes}
-              className={`absolute whitespace-nowrap text-center ${active ? 'font-bold text-[#ffb547]' : ''}`}
-              style={{
-                left: `${percent}%`,
-                transform: percent === 100 ? 'translateX(-100%)' : 'translateX(-50%)',
-              }}
-            >
-              {mark.minutes.toLocaleString('tr-TR')} dk
-              <br />
-              <span className={active ? 'text-[#ffb547]' : 'text-white/30'}>{mark.rate}p</span>
-            </span>
-          );
-        })}
+      <div className="mt-2 flex justify-between text-xs text-white/40">
+        <span>0 dk</span>
+        <span>{MAX_PACKAGE_MINUTES.toLocaleString('tr-TR')} dk</span>
       </div>
 
-      <div className="mt-8 grid gap-3 sm:grid-cols-3">
-        <PriceCell label="Sabit sistem" value={pounds(PLATFORM_MONTHLY_FEE_PENCE)} />
-        <PriceCell label={usageLabel} value={pounds(usagePence)} />
-        <PriceCell label="Tahmini aylık" value={pounds(monthlyPence)} emphasis />
+      <div className="mt-8 rounded-2xl border border-[#ffb547] bg-[#ffb547] p-5 text-[#12221d]">
+        <p className="text-sm font-bold text-[#12221d]/65">Tahmini aylık toplam</p>
+        <p className="mt-1 text-4xl font-black">{pounds(monthlyPence)}</p>
+        <p className="mt-3 text-sm font-semibold text-[#12221d]/70">
+          £{(PLATFORM_MONTHLY_FEE_PENCE / 100).toFixed(2)} sistem + {minutes.toLocaleString('tr-TR')} dk × {best.ratePence}p
+        </p>
       </div>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+        <p className="text-sm font-bold text-white/80">Dakika fiyatı kullanıma göre düşer</p>
+        <ul className="mt-3 space-y-1.5">
+          {TIER_BANDS.map((band) => {
+            const active = best.ratePence === band.rate;
+            return (
+              <li
+                key={band.upTo}
+                className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-sm ${
+                  active ? 'bg-[#ffb547] font-bold text-[#12221d]' : 'text-white/55'
+                }`}
+              >
+                <span>{band.label}</span>
+                <span className="font-bold">{band.rate}p / dk</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
       <p className="mt-5 text-xs leading-5 text-white/55">
         Bu bir tahmindir. Gerçek fatura, gerçekleşen konuşma süresine göre hesaplanır; kullanılmayan dakika için ödeme yapılmaz.
       </p>
-    </div>
-  );
-}
-
-function PriceCell({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }) {
-  return (
-    <div className={`rounded-2xl border p-4 ${emphasis ? 'border-[#ffb547] bg-[#ffb547] text-[#12221d]' : 'border-white/10 bg-white/5'}`}>
-      <p className={`text-xs ${emphasis ? 'text-[#12221d]/65' : 'text-white/50'}`}>{label}</p>
-      <p className="mt-1 text-2xl font-black">{value}</p>
     </div>
   );
 }
