@@ -57,6 +57,7 @@ type RetellWebhookUser = {
 type RetellSubscriptionRow = {
   id: string;
   user_id: string;
+  plan_name: string;
   status: string;
   total_minutes: number;
   rate_pence: number | null;
@@ -395,8 +396,8 @@ export async function handleRetellWebhook(
 
   const subscription = subRows[0] || null;
   const activeRatePence = subscription?.status === 'pay_as_you_go'
-    ? (subscription.payg_rate_pence || subscription.rate_pence || 20)
-    : (subscription?.rate_pence || 20);
+    ? (subscription.payg_rate_pence || subscription.rate_pence || PAYG_RATE_PENCE)
+    : (subscription?.rate_pence || PAYG_RATE_PENCE);
   const customerCostMinorUnits = subscription
     ? Math.round(durationMinutes * activeRatePence)
     : 0;

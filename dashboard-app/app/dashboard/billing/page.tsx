@@ -1,153 +1,126 @@
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
-import PricingSlider from '@/components/PricingSlider';
-import PricingTiers from '@/components/PricingTiers';
+import { CreditCard, Printer, ReceiptText } from 'lucide-react';
 import ActiveSubscriptionWidget from '@/components/ActiveSubscriptionWidget';
-import { getActiveSubscription } from '@/lib/db';
+import PlatformPlanCard from '@/components/PlatformPlanCard';
+import CreditPackageCards from '@/components/CreditPackageCards';
+import { getActiveSubscription, getUserById } from '@/lib/db';
+import { getPlatformBillingState, isPlatformSubscriptionActive } from '@/lib/platform-billing';
 import { sql } from '@vercel/postgres';
 
 export default async function BillingPage() {
-    const session = await auth();
+  const session = await auth();
 
-    if (!session || !session.user?.id) {
-        redirect('/login');
-    }
+  if (!session?.user?.id) {
+    redirect('/login');
+  }
 
-    const subscription = await getActiveSubscription(session.user.id);
+  const [user, usagePlan] = await Promise.all([
+    getUserById(session.user.id),
+    getActiveSubscription(session.user.id),
+  ]);
 
-    let remainingMinutes = 0;
-    if (subscription?.status === 'active' && subscription.total_minutes) {
-        const { rows } = await sql<{ sum: number }>`
-            SELECT COALESCE(SUM(duration), 0)::int as sum
-            FROM calls
-            WHERE user_id = ${session.user.id}
-              AND call_date >= ${subscription.start_date}
-        `;
+  if (!user) {
+    redirect('/login');
+  }
 
-        const usedMinutes = Math.ceil((rows[0]?.sum || 0) / 60000);
-        remainingMinutes = Math.max(0, Number(subscription.total_minutes) - usedMinutes);
-    }
+  const [platformState, printerRows] = await Promise.all([
+    getPlatformBillingState(user.stripe_customer_id),
+    sql<{ purchased: boolean }>`
+      SELECT EXISTS(
+        SELECT 1 FROM billing_events
+        WHERE business_id = ${session.user.id}
+          AND event_type = 'platform_subscription_started_with_printer'
+      ) AS purchased
+    `,
+  ]);
 
-    const isPackageLow = subscription?.status === 'active' && subscription.total_minutes
-        ? remainingMinutes < (Number(subscription.total_minutes) * 0.2) || remainingMinutes < 50
-        : false;
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20 text-slate-950 dark:bg-slate-950 dark:text-white">
+      <header className="relative overflow-hidden border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.12),transparent_42%)]" />
+        <div className="relative mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+            Faturalandırma
+          </p>
+          <h1 className="mt-3 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl">
+            Sabit sistem ücreti, şeffaf dakika kullanımı.
+          </h1>
+          <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
+            Kurulum ücretsizdir. Aylık aboneliği Stripe ile başlatın; gerçekleşen telefon kullanımı haftalık olarak ayrıca tahsil edilir.
+          </p>
+        </div>
+      </header>
 
-    const showPricing = !subscription || subscription.status !== 'active' || isPackageLow;
+      <main className="mx-auto max-w-7xl space-y-10 px-4 py-10 sm:px-6 lg:px-8">
+        <PlatformPlanCard
+          status={platformState.status}
+          printerPurchased={!!printerRows.rows[0]?.purchased}
+          currentPeriodEnd={platformState.currentPeriodEnd}
+        />
 
-    return (
-        <>
-            {/* Aurora Background */}
-            <div className="aurora-bg">
-                <div className="aurora-layer aurora-layer-1" />
-                <div className="aurora-layer aurora-layer-2" />
-                <div className="aurora-layer aurora-layer-3" />
-                <div className="noise-overlay" />
+        {usagePlan ? (
+          <section>
+            <div className="mb-4">
+              <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Kullanım durumu</p>
+              <h2 className="mt-2 text-2xl font-black">Aktif dakika hesabınız</h2>
             </div>
+            <ActiveSubscriptionWidget />
+          </section>
+        ) : null}
 
-            <div className="relative min-h-screen">
-                {/* Hero Section */}
-                <div className="relative overflow-hidden">
-                    <div className="absolute inset-0 grid-pattern opacity-50" />
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 relative">
-                        <div className="text-center animate-fade-in-up">
-                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500/10 to-orange-500/10 dark:from-amber-500/20 dark:to-orange-500/20 border border-amber-200/50 dark:border-amber-700/50 mb-6">
-                                <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                                </svg>
-                                <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                                    Billing & Plans
-                                </span>
-                            </div>
+        <section>
+          <div className="mb-5 max-w-3xl">
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">İsteğe bağlı toplu kontör</p>
+            <h2 className="mt-2 text-3xl font-black">Daha çok kullanın, dakika fiyatını düşürün.</h2>
+            <p className="mt-3 leading-7 text-slate-600 dark:text-slate-300">
+              Standart 25p/dk kullanım devam eder. Düzenli sipariş alan işletmeler toplu kontör alarak 20p/dk’ya kadar daha düşük fiyattan kullanabilir.
+            </p>
+          </div>
+          <CreditPackageCards
+            variant="dashboard"
+            purchaseEnabled={isPlatformSubscriptionActive(platformState.status)}
+          />
+        </section>
 
-                            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold">
-                                <span className="gradient-text">Paket Yönetimi</span>
-                            </h1>
-                            <p className="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                                İhtiyacınıza en uygun dakika paketini seçin. Satın aldığınız dakikaları bitene kadar kullanın, süre sınırı olmadan esnekliğin tadını çıkarın.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
-                    {/* Active Subscription */}
-                    <div className="mb-12 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-                        <ActiveSubscriptionWidget />
-                    </div>
-
-                    {!showPricing ? (
-                        <div className="mb-16 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-                            <div className="max-w-3xl mx-auto rounded-2xl border border-indigo-200/60 dark:border-indigo-700/60 bg-indigo-50/70 dark:bg-indigo-950/20 p-6 text-center">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                                    Aktif paketiniz kullanimda
-                                </h2>
-                                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                                    Paketiniz bitmeye yaklastiginda veya yeni paketi planlamak istediginizde bu sayfada
-                                    sonraki satin alim secenekleri tekrar gosterilecektir.
-                                </p>
-                            </div>
-                        </div>
-                    ) : (
-                        <>
-                            {/* Pricing Tier Cards */}
-                            <div className="mb-16 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-                                <PricingTiers />
-                            </div>
-
-                            {/* Interactive Slider */}
-                            <div className="animate-fade-in-up" style={{ animationDelay: '300ms' }}>
-                                <PricingSlider />
-                            </div>
-                        </>
-                    )}
-
-                    {/* Feature Cards */}
-                    <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <FeatureCard
-                            title="Dinamik Fiyatlandırma"
-                            description="Sabit paketlere hapsolmayın. İhtiyacınız değiştikçe paketini anlık güncelleyin."
-                            icon={
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                </svg>
-                            }
-                            delay="400ms"
-                        />
-                        <FeatureCard
-                            title="Stripe Güvencesi"
-                            description="Tüm ödemeleriniz dünyaca güvenli Stripe altyapısı ile şifrelenmiş olarak gerçekleşir."
-                            icon={
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                </svg>
-                            }
-                            delay="500ms"
-                        />
-                        <FeatureCard
-                            title="Sınırsız Ölçeklenebilirlik"
-                            description="Aynı anda 100 çağrı gelse bile sisteminiz asla 'meşgul' tonu vermez."
-                            icon={
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                            }
-                            delay="600ms"
-                        />
-                    </div>
-                </div>
-            </div>
-        </>
-    );
+        <section className="grid gap-5 md:grid-cols-3">
+          <InfoCard
+            icon={<CreditCard className="h-5 w-5" />}
+            title="£9.90 aylık"
+            description="Asistan, yönetim paneli ve sistem bakımının sabit bedeli. Stripe tarafından her ay otomatik yenilenir."
+          />
+          <InfoCard
+            icon={<ReceiptText className="h-5 w-5" />}
+            title="25p’den başlayan kullanım"
+            description="Paketsiz kullanım 25p/dk olarak haftalık tahsil edilir. Toplu kontör seçeneklerinde birim fiyat 20p/dk’ya kadar düşer."
+          />
+          <InfoCard
+            icon={<Printer className="h-5 w-5" />}
+            title="£199 yazıcı"
+            description="Termal sipariş yazıcısı tek seferliktir; aylık ücrete tekrar eklenmez. Uyumlu yazıcınız varsa zorunlu değildir."
+          />
+        </section>
+      </main>
+    </div>
+  );
 }
 
-function FeatureCard({ title, description, icon, delay }: { title: string, description: string, icon: React.ReactNode, delay: string }) {
-    return (
-        <div className="gradient-border-card p-6 hover-lift aurora-glow opacity-0 animate-fade-in-up bg-gradient-to-br from-indigo-500/20 via-indigo-500/5 to-purple-500/20 border-indigo-200/50 dark:border-indigo-700/50" style={{ animationDelay: delay }}>
-            <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-4">
-                {icon}
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{title}</h3>
-            <p className="text-gray-600 dark:text-gray-400 leading-relaxed">{description}</p>
-        </div>
-    );
+function InfoCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+        {icon}
+      </div>
+      <h3 className="font-black">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{description}</p>
+    </article>
+  );
 }

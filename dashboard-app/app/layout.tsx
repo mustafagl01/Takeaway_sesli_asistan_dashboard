@@ -1,15 +1,28 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Manrope } from 'next/font/google'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import './globals.css'
 import Providers from './providers'
 import Navbar from '@/components/Navbar'
 
-const inter = Inter({ subsets: ['latin'] })
+const manrope = Manrope({ subsets: ['latin', 'latin-ext'] })
 
 export const metadata: Metadata = {
-  title: 'UK Takeaway Dashboard',
-  description: 'Phone order assistant dashboard for UK takeaway businesses',
+  metadataBase: new URL('https://www.mglsystems.uk'),
+  title: {
+    default: 'AloSipariş | Yapay Zekâ Telefon Sipariş Asistanı',
+    template: '%s | AloSipariş',
+  },
+  description: 'UK takeaway işletmeleri için telefon siparişini alan, doğrulayan ve termal yazıcıya ileten yapay zekâ sesli asistan.',
+  openGraph: {
+    title: 'AloSipariş | Telefon siparişini alır, doğrular, yazdırır',
+    description: 'Kurulum £0, aylık £9.90 ve kullandığın kadar dakika. UK takeaway işletmeleri için.',
+    url: 'https://www.mglsystems.uk',
+    siteName: 'AloSipariş by MGL Systems',
+    locale: 'tr_TR',
+    type: 'website',
+  },
+  alternates: { canonical: '/' },
 }
 
 /**
@@ -31,8 +44,8 @@ export default async function RootLayout({
   const session = await auth()
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+    <html lang="tr" suppressHydrationWarning>
+      <body className={manrope.className}>
         <Providers session={session}>
           {/* Conditionally render Navbar only on authenticated dashboard routes */}
           {session && <Navbar />}

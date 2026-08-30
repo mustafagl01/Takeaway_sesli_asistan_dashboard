@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
 import Stripe from 'stripe';
+import { PAYG_RATE_PENCE } from '@/lib/pricing';
+import crypto from 'node:crypto';
 
 export const runtime = 'nodejs';
 
@@ -78,9 +80,20 @@ export async function GET(req: Request) {
       }
 
       const totalMinutes = parseFloat((totalMs / 60000).toFixed(3));
-      const ratePence = sub.payg_rate_pence || sub.rate_pence || 20;
+      const ratePence = sub.payg_rate_pence || sub.rate_pence || PAYG_RATE_PENCE;
       const totalPence = Math.round(totalMinutes * ratePence);
       const totalPounds = (totalPence / 100).toFixed(2);
+
+      if (totalPence < 30) {
+        results.push({
+          user: sub.email,
+          status: 'carried_forward',
+          minutes: totalMinutes,
+          amount_pence: totalPence,
+          calls: callCount,
+        });
+        continue;
+      }
 
       const canAutoCharge = !!(
         sub.auto_payg_enabled &&
@@ -90,21 +103,28 @@ export async function GET(req: Request) {
 
       if (canAutoCharge) {
         try {
-          const paymentIntent = await getStripe().paymentIntents.create({
-            amount: totalPence,
-            currency: 'gbp',
-            customer: sub.stripe_customer_id!,
-            payment_method: sub.stripe_default_payment_method_id!,
-            confirm: true,
-            off_session: true,
-            description: `Weekly PAYG usage for ${sub.email}: ${totalMinutes.toFixed(2)} dk`,
-            metadata: {
-              userId: sub.user_id,
-              periodStart: chargeFrom,
-              periodEnd: nowISO,
-              type: 'weekly_payg',
+          const idempotencyKey = crypto
+            .createHash('sha256')
+            .update(`${sub.id}|${chargeFrom}|${sub.stripe_default_payment_method_id}|${nowISO.slice(0, 10)}`)
+            .digest('hex');
+          const paymentIntent = await getStripe().paymentIntents.create(
+            {
+              amount: totalPence,
+              currency: 'gbp',
+              customer: sub.stripe_customer_id!,
+              payment_method: sub.stripe_default_payment_method_id!,
+              confirm: true,
+              off_session: true,
+              description: `Weekly PAYG usage for ${sub.email}: ${totalMinutes.toFixed(2)} dk`,
+              metadata: {
+                userId: sub.user_id,
+                periodStart: chargeFrom,
+                periodEnd: nowISO,
+                type: 'weekly_payg',
+              },
             },
-          });
+            { idempotencyKey }
+          );
 
           await sql`
             INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
@@ -160,22 +180,16 @@ export async function GET(req: Request) {
         VALUES (
           ${'be_payg_invoice_' + sub.user_id + '_' + Date.now()},
           ${sub.user_id},
-          'payg_weekly_invoice',
+          'payg_payment_method_required',
           ${totalPence},
-          ${`Haftalik PAYG manuel fatura: ${totalMinutes.toFixed(2)} dk x ${ratePence}p = GBP ${totalPounds} (${callCount} arama)`},
+          ${`PAYG tahsilati bekliyor; gecerli odeme yontemi gerekli: ${totalMinutes.toFixed(2)} dk x ${ratePence}p = GBP ${totalPounds} (${callCount} arama)`},
           ${nowISO}
         )
       `;
 
-      await sql`
-        UPDATE subscriptions
-        SET payg_billed_until = ${nowISO}
-        WHERE id = ${sub.id}
-      `;
-
       results.push({
         user: sub.email,
-        status: 'manual_invoice',
+        status: 'payment_method_required',
         minutes: totalMinutes,
         amount_pence: totalPence,
         calls: callCount,

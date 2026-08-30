@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/app/api/auth/[...nextauth]/route';
 import { listCallsViaApi, getCallDetailsViaApi } from '@/lib/retell';
 import { getUserById, cacheCall, updateCallCost, getActiveSubscription, getBusinessesForUser } from '@/lib/db';
+import { PAYG_RATE_PENCE } from '@/lib/pricing';
 
 export const runtime = 'nodejs';
 
@@ -69,7 +70,7 @@ export async function POST(): Promise<NextResponse> {
       // call.duration is in SECONDS (retell.ts converts duration_ms → seconds)
       // Seconds-precision billing: charge exact seconds used, not rounded up
       const minutesUsed = parseFloat((call.duration / 60).toFixed(3));
-      const ratePence = (activeSubscription && activeSubscription.rate_pence) ? activeSubscription.rate_pence : 20; // Default Pay As You Go rate is 20p/min
+      const ratePence = activeSubscription?.rate_pence || PAYG_RATE_PENCE;
       customerCostCents = Math.round(minutesUsed * ratePence);
     }
 

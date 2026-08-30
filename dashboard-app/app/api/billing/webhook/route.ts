@@ -4,9 +4,10 @@ import { createSubscription, getActiveSubscription, updateUser } from '@/lib/db'
 import { sql } from '@vercel/postgres';
 import {
   buildPresetPlanName,
-  calculatePackageRatePence,
+  calculatePackagePriceInPennies,
   derivePaygRatePence,
   getBillingTierName,
+  PAYG_RATE_PENCE,
 } from '@/lib/pricing';
 
 export const runtime = 'nodejs';
@@ -43,6 +44,58 @@ async function getPaymentMethodId(session: Stripe.Checkout.Session): Promise<str
   }
 }
 
+async function getPlatformPaymentMethodId(
+  subscription: Stripe.Subscription,
+  customerId: string | null
+): Promise<string | null> {
+  if (typeof subscription.default_payment_method === 'string') {
+    return subscription.default_payment_method;
+  }
+  if (subscription.default_payment_method?.id) {
+    return subscription.default_payment_method.id;
+  }
+
+  if (!customerId) return null;
+
+  try {
+    const customer = await getStripe().customers.retrieve(customerId);
+    if (!customer.deleted) {
+      const defaultMethod = customer.invoice_settings.default_payment_method;
+      if (typeof defaultMethod === 'string') return defaultMethod;
+      if (defaultMethod?.id) return defaultMethod.id;
+    }
+
+    const methods = await getStripe().paymentMethods.list({
+      customer: customerId,
+      type: 'card',
+      limit: 1,
+    });
+    return methods.data[0]?.id || null;
+  } catch (error) {
+    console.warn('Failed to resolve platform payment method:', error);
+    return null;
+  }
+}
+
+async function syncPlatformSubscription(subscription: Stripe.Subscription) {
+  const userId = subscription.metadata?.userId;
+  if (!userId || subscription.metadata?.type !== 'platform_subscription') return;
+
+  const customerId = typeof subscription.customer === 'string'
+    ? subscription.customer
+    : subscription.customer.id;
+  const paymentMethodId = await getPlatformPaymentMethodId(subscription, customerId);
+
+  const updateResult = await updateUser(userId, {
+    stripe_customer_id: customerId,
+    stripe_default_payment_method_id: paymentMethodId,
+    auto_payg_enabled: !!customerId && !!paymentMethodId,
+  });
+  if (!updateResult.success) {
+    throw new Error(updateResult.error || 'Failed to update platform subscription state');
+  }
+}
+
 export async function POST(req: Request) {
   const body = await req.text();
   const signature = req.headers.get('stripe-signature');
@@ -63,11 +116,69 @@ export async function POST(req: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
     const metadata = session.metadata;
 
+    if (metadata?.type === 'platform_subscription' && metadata.userId) {
+      const subscriptionId = typeof session.subscription === 'string'
+        ? session.subscription
+        : session.subscription?.id;
+
+      if (!subscriptionId) {
+        return NextResponse.json({ error: 'Missing Stripe subscription' }, { status: 400 });
+      }
+
+      try {
+        const platformSubscription = await getStripe().subscriptions.retrieve(subscriptionId);
+        await syncPlatformSubscription(platformSubscription);
+
+        const now = new Date().toISOString();
+        const activeUsagePlan = await getActiveSubscription(metadata.userId);
+        if (!activeUsagePlan) {
+          const paygResult = await createSubscription({
+            id: `sub_payg_${session.id}`,
+            user_id: metadata.userId,
+            plan_name: 'Kullandikca Ode',
+            total_minutes: 0,
+            rate_pence: PAYG_RATE_PENCE,
+            payg_rate_pence: PAYG_RATE_PENCE,
+            start_date: now,
+            end_date: now,
+            status: 'pay_as_you_go',
+            replaceCurrent: false,
+            payg_billed_until: now,
+          });
+          if (!paygResult.success) {
+            throw new Error(paygResult.error || 'Failed to activate usage billing');
+          }
+        }
+
+        await sql`
+          INSERT INTO billing_events (id, business_id, event_type, amount_pence, description, created_at)
+          VALUES (
+            ${`be_platform_${session.id}`},
+            ${metadata.userId},
+            ${metadata.includesPrinter === 'true'
+              ? 'platform_subscription_started_with_printer'
+              : 'platform_subscription_started'},
+            ${session.amount_total || 0},
+            ${metadata.includesPrinter === 'true'
+              ? `Aylik sistem aboneligi baslatildi ve £199 termal yazici satin alindi. Kullanim ${PAYG_RATE_PENCE}p/dk.`
+              : `Aylik sistem aboneligi baslatildi. Kullanim ${PAYG_RATE_PENCE}p/dk.`},
+            ${now}
+          )
+          ON CONFLICT (id) DO NOTHING
+        `;
+      } catch (error) {
+        console.error('Failed to activate platform subscription:', error);
+        return NextResponse.json({ error: 'Failed to process platform checkout' }, { status: 500 });
+      }
+
+      return NextResponse.json({ received: true });
+    }
+
     if (metadata?.type === 'prepaid_minutes' && metadata.userId && metadata.minutes) {
       const minutes = Number.parseInt(metadata.minutes, 10);
       const tier = (metadata.tier as 'Small' | 'Medium' | 'Pro' | undefined) || getBillingTierName(minutes);
       const activationMode = metadata.activationMode === 'queued' ? 'queued' : 'immediate';
-      const ratePence = calculatePackageRatePence(minutes);
+      const ratePence = Math.ceil(calculatePackagePriceInPennies(minutes) / minutes);
       const paygRatePence = derivePaygRatePence(ratePence);
       const now = new Date().toISOString();
       const subscriptionId = `sub_${session.id}`;
@@ -129,8 +240,8 @@ export async function POST(req: Request) {
             ${session.amount_total || 0},
             ${
               shouldQueue
-                ? `${minutes} dakika ${tier} paket satin alindi ve siradaki paket olarak kuyruga alindi. Paket biterse kart kayitliysa otomatik 20p/dk PAYG acilabilir.`
-                : `${minutes} dakika ${tier} paket satin alindi. Paket biterse kart kayitliysa otomatik 20p/dk PAYG acilabilir.`
+                ? `${minutes} dakika ${tier} paket satin alindi ve siradaki paket olarak kuyruga alindi. Paket biterse kart kayitliysa otomatik ${PAYG_RATE_PENCE}p/dk PAYG acilabilir.`
+                : `${minutes} dakika ${tier} paket satin alindi. Paket biterse kart kayitliysa otomatik ${PAYG_RATE_PENCE}p/dk PAYG acilabilir.`
             },
             ${now}
           )
@@ -144,6 +255,17 @@ export async function POST(req: Request) {
         console.error('Failed to create subscription after payment:', error);
         return NextResponse.json({ error: 'Failed to process checkout session' }, { status: 500 });
       }
+    }
+  } else if (
+    event.type === 'customer.subscription.created'
+    || event.type === 'customer.subscription.updated'
+    || event.type === 'customer.subscription.deleted'
+  ) {
+    try {
+      await syncPlatformSubscription(event.data.object as Stripe.Subscription);
+    } catch (error) {
+      console.error('Failed to sync platform subscription:', error);
+      return NextResponse.json({ error: 'Failed to sync subscription' }, { status: 500 });
     }
   }
 

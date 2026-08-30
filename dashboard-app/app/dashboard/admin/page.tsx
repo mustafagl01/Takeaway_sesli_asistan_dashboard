@@ -239,7 +239,7 @@ function PackageFields({
       {value.mode === 'preset' ? (
         value.presetKey === 'payg' ? (
           <div className="rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-700 dark:text-amber-300">
-            Bu secenekte dakika paketi acilmaz. Hesap direkt Pay As You Go modunda 20p/dk ile devam eder.
+            Bu secenekte dakika paketi acilmaz. Hesap direkt Pay As You Go modunda {PRESET_PACKAGE_DEFINITIONS.payg.ratePence}p/dk ile devam eder.
           </div>
         ) : (
           <div>

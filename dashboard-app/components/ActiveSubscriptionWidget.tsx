@@ -155,7 +155,7 @@ export default function ActiveSubscriptionWidget() {
             </>
           ) : (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/20 dark:text-amber-300">
-              Paketiniz bitmis durumda. Su anda kullandikca ode modundasiniz ve kullanimlariniz 20p/dk uzerinden haftalik tahsil edilir.
+              Kullandıkça öde modundasınız. Kullanımınız {subscription.rate_pence}p/dk üzerinden haftalık tahsil edilir.
             </div>
           )}
         </>
@@ -178,7 +178,7 @@ export default function ActiveSubscriptionWidget() {
       <div className="mt-6 space-y-3">
         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
           {cardOnFile && autoPaygEnabled
-            ? 'Kartiniz kayitli. Eger siradaki paket yoksa mevcut paket bittiginde sistem otomatik 20p/dk PAYG moduna gecebilir.'
+            ? `Kartınız Stripe üzerinde kayıtlı. Kullanımınız ${subscription?.rate_pence || 25}p/dk üzerinden haftalık tahsil edilir.`
             : 'Kartiniz kayitli degil. Paketiniz bitmeden once bir sonraki paketi satin almanizi oneririz.'}
         </div>
 

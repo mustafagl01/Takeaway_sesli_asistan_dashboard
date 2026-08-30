@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { calculatePackageRatePence, getBillingTierName } from '@/lib/pricing';
+import { calculatePackagePriceInPennies, calculatePackageRatePence, getBillingTierName, PAYG_RATE_PENCE } from '@/lib/pricing';
 
 interface BillingStateResponse {
   success: boolean;
@@ -28,9 +28,9 @@ function clampMinutes(value: number): number {
 export default function PricingSlider() {
   const [minutes, setMinutes] = useState(DEFAULT_MINUTES);
   const [minutesInput, setMinutesInput] = useState(String(DEFAULT_MINUTES));
-  const [price, setPrice] = useState(0);
+  const [price, setPrice] = useState(calculatePackagePriceInPennies(DEFAULT_MINUTES) / 100);
   const [tier, setTier] = useState<'Small' | 'Medium' | 'Pro'>('Medium');
-  const [rate, setRate] = useState(0.18);
+  const [rate, setRate] = useState(calculatePackageRatePence(DEFAULT_MINUTES) / 100);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasActivePackage, setHasActivePackage] = useState(false);
@@ -44,7 +44,7 @@ export default function PricingSlider() {
 
     setRate(currentRate);
     setTier(currentTier);
-    setPrice(minutes * currentRate);
+    setPrice(calculatePackagePriceInPennies(minutes) / 100);
   }, [minutes]);
 
   useEffect(() => {
@@ -283,7 +283,7 @@ export default function PricingSlider() {
           Satin aldiginiz dakikalar bitene kadar gecerlidir, sure siniri yoktur.
         </p>
         <p>
-          Eger siradaki paketiniz yoksa ve kartiniz kayitliysa, mevcut paket bittiginde otomatik 20p/dk PAYG moduna gecilebilir.
+          Eger siradaki paketiniz yoksa ve kartiniz kayitliysa, mevcut paket bittiginde otomatik {PAYG_RATE_PENCE}p/dk PAYG moduna gecilebilir.
         </p>
         <p>
           {cardOnFile && autoPaygEnabled

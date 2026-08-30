@@ -190,7 +190,7 @@ export default function PricingTiers() {
             <div className="mt-8 text-center">
                 <p className="text-sm text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
                     💡 <strong>Nasıl çalışır?</strong> Aşağıdaki kaydırıcı ile tam ihtiyacınız kadar dakika seçin. Seçtiğiniz
-                    dakika miktarı hangi kademeye giriyorsa, o kademenin birim fiyatı <em>tüm dakikalara</em> uygulanır.
+                    ilk 400 dakika Small, sonraki 400 dakika Medium, üzeri ise Pro kademesinden hesaplanır.
                     Aldığınız paket bitene kadar kullanılabilir, süre sınırı yoktur.
                 </p>
             </div>
