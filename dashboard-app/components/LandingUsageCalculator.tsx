@@ -12,6 +12,14 @@ function pounds(pence: number): string {
   return `£${(pence / 100).toFixed(2)}`;
 }
 
+// Rate boundaries from lib/pricing.ts, positioned to scale on the 0-2000 track.
+const TIER_MARKS = [
+  { minutes: 200, rate: 25 },
+  { minutes: 500, rate: 23 },
+  { minutes: 1_000, rate: 21 },
+  { minutes: MAX_PACKAGE_MINUTES, rate: 20 },
+];
+
 export default function LandingUsageCalculator() {
   const [minutes, setMinutes] = useState(300);
   const best = useMemo(() => calculateBestMonthlyUsageInPennies(minutes), [minutes]);
@@ -42,8 +50,25 @@ export default function LandingUsageCalculator() {
         onChange={(event) => setMinutes(Number(event.target.value))}
         className="mt-4 w-full accent-[#ffb547]"
       />
-      <div className="mt-2 flex justify-between text-xs text-white/40">
-        <span>0 dk</span><span>200 dk</span><span>500 dk</span><span>1.000 dk</span><span>{MAX_PACKAGE_MINUTES.toLocaleString('tr-TR')} dk</span>
+      <div className="relative mt-2 h-8 text-[11px] leading-tight text-white/40">
+        {TIER_MARKS.map((mark) => {
+          const percent = (mark.minutes / MAX_PACKAGE_MINUTES) * 100;
+          const active = best.ratePence === mark.rate;
+          return (
+            <span
+              key={mark.minutes}
+              className={`absolute whitespace-nowrap text-center ${active ? 'font-bold text-[#ffb547]' : ''}`}
+              style={{
+                left: `${percent}%`,
+                transform: percent === 100 ? 'translateX(-100%)' : 'translateX(-50%)',
+              }}
+            >
+              {mark.minutes.toLocaleString('tr-TR')} dk
+              <br />
+              <span className={active ? 'text-[#ffb547]' : 'text-white/30'}>{mark.rate}p</span>
+            </span>
+          );
+        })}
       </div>
 
       <div className="mt-8 grid gap-3 sm:grid-cols-3">
