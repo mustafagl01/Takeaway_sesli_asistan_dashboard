@@ -16,9 +16,7 @@ export default function LandingUsageCalculator() {
   const best = useMemo(() => calculateBestMonthlyUsageInPennies(minutes), [minutes]);
   const usagePence = best.usagePence;
   const monthlyPence = PLATFORM_MONTHLY_FEE_PENCE + usagePence;
-  const usageLabel = best.packageMinutes
-    ? `${best.packageMinutes.toLocaleString('tr-TR')} dk kontör${best.overageMinutes > 0 ? ` + ${best.overageMinutes} dk PAYG` : ''}`
-    : `${minutes} dk PAYG`;
+  const usageLabel = `${minutes} dk × ${best.ratePence}p`;
 
   return (
     <div className="rounded-[28px] bg-[#12221d] p-6 text-white shadow-[0_30px_80px_rgba(18,34,29,0.24)] sm:p-8">

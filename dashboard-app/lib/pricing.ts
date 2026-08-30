@@ -1,5 +1,5 @@
 export type PresetPackageKey = 'payg' | 'small' | 'medium' | 'pro';
-export type BillingTierName = 'Small' | 'Medium' | 'Pro';
+export type BillingTierName = 'Giris' | 'Small' | 'Medium' | 'Pro';
 export const PLATFORM_MONTHLY_FEE_PENCE = 990;
 export const PRINTER_ONE_TIME_FEE_PENCE = 19_900;
 export const PAYG_RATE_PENCE = 25;
@@ -52,23 +52,29 @@ export const PRESET_PACKAGE_DEFINITIONS: Record<PresetPackageKey, PresetPackageD
 
 export const PRESET_PACKAGE_OPTIONS = Object.values(PRESET_PACKAGE_DEFINITIONS);
 export const CREDIT_PACKAGE_MINUTES = [500, 1_000, 2_000] as const;
+export const MIN_PACKAGE_MINUTES = 1;
+export const MAX_PACKAGE_MINUTES = 2_000;
 
 export function isCreditPackageMinutes(minutes: number): boolean {
   return CREDIT_PACKAGE_MINUTES.includes(minutes as (typeof CREDIT_PACKAGE_MINUTES)[number]);
 }
 
+export function isPackageMinutesInRange(minutes: number): boolean {
+  return Number.isInteger(minutes) && minutes >= MIN_PACKAGE_MINUTES && minutes <= MAX_PACKAGE_MINUTES;
+}
+
 export function calculatePackageRatePence(minutes: number): number {
-  if (minutes === 500) return PRESET_PACKAGE_DEFINITIONS.small.ratePence;
-  if (minutes === 1_000) return PRESET_PACKAGE_DEFINITIONS.medium.ratePence;
-  if (minutes === 2_000) return PRESET_PACKAGE_DEFINITIONS.pro.ratePence;
-  throw new RangeError('Unsupported prepaid minute package');
+  if (minutes <= 200) return PAYG_RATE_PENCE;
+  if (minutes <= 500) return PRESET_PACKAGE_DEFINITIONS.small.ratePence;
+  if (minutes <= 1_000) return PRESET_PACKAGE_DEFINITIONS.medium.ratePence;
+  return PRESET_PACKAGE_DEFINITIONS.pro.ratePence;
 }
 
 export function getBillingTierName(minutes: number): BillingTierName {
-  if (minutes === 500) return 'Small';
-  if (minutes === 1_000) return 'Medium';
-  if (minutes === 2_000) return 'Pro';
-  throw new RangeError('Unsupported prepaid minute package');
+  if (minutes <= 200) return 'Giris';
+  if (minutes <= 500) return 'Small';
+  if (minutes <= 1_000) return 'Medium';
+  return 'Pro';
 }
 
 export function calculatePackagePriceInPennies(minutes: number): number {
@@ -109,36 +115,20 @@ export function buildPresetPlanName(presetKey: PresetPackageKey, minutes: number
   return `${preset.planName} (${minutes} dk)`;
 }
 
+export function buildPackagePlanName(minutes: number): string {
+  return `${minutes.toLocaleString('tr-TR')} Dakika Kontör`;
+}
+
 export function calculateBestMonthlyUsageInPennies(minutes: number): {
   usagePence: number;
-  packageMinutes: 500 | 1_000 | 2_000 | null;
-  overageMinutes: number;
+  ratePence: number;
 } {
   if (minutes <= 0) {
-    return { usagePence: 0, packageMinutes: null, overageMinutes: 0 };
+    return { usagePence: 0, ratePence: PAYG_RATE_PENCE };
   }
 
-  const options: Array<{ packageMinutes: 500 | 1_000 | 2_000 | null }> = [
-    { packageMinutes: null },
-    { packageMinutes: 500 },
-    { packageMinutes: 1_000 },
-    { packageMinutes: 2_000 },
-  ];
-
-  let best = { usagePence: calculateMonthlyUsageInPennies(minutes), packageMinutes: null as 500 | 1_000 | 2_000 | null, overageMinutes: minutes };
-
-  for (const option of options) {
-    if (option.packageMinutes == null) continue;
-    const overageMinutes = Math.max(0, minutes - option.packageMinutes);
-    const usagePence =
-      calculatePackagePriceInPennies(option.packageMinutes) + calculateMonthlyUsageInPennies(overageMinutes);
-
-    if (usagePence < best.usagePence) {
-      best = { usagePence, packageMinutes: option.packageMinutes, overageMinutes };
-    }
-  }
-
-  return best;
+  const ratePence = calculatePackageRatePence(minutes);
+  return { usagePence: minutes * ratePence, ratePence };
 }
 
 export function describePresetRange(presetKey: PresetPackageKey): string {

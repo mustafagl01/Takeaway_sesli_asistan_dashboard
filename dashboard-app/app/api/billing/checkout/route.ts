@@ -11,7 +11,7 @@ import {
   calculatePackagePriceInPennies,
   calculatePackageRatePence,
   getBillingTierName,
-  isCreditPackageMinutes,
+  isPackageMinutesInRange,
 } from '@/lib/pricing';
 import {
   getPlatformBillingState,
@@ -49,9 +49,9 @@ export async function POST(req: Request) {
     const body = await req.json() as { minutes?: unknown };
     const minutes = body?.minutes;
 
-    if (typeof minutes !== 'number' || !Number.isInteger(minutes) || !isCreditPackageMinutes(minutes)) {
+    if (typeof minutes !== 'number' || !isPackageMinutesInRange(minutes)) {
       return NextResponse.json(
-        { error: 'Gecersiz kontor paketi. 500, 1.000 veya 2.000 dakika secin.' },
+        { error: 'Gecersiz kontor miktari. 1 ile 2.000 dakika arasinda bir deger secin.' },
         { status: 400 }
       );
     }

@@ -2,7 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { calculatePackagePriceInPennies, calculatePackageRatePence, getBillingTierName, PAYG_RATE_PENCE } from '@/lib/pricing';
+import {
+  BillingTierName,
+  calculatePackagePriceInPennies,
+  calculatePackageRatePence,
+  getBillingTierName,
+  MAX_PACKAGE_MINUTES,
+  MIN_PACKAGE_MINUTES,
+  PAYG_RATE_PENCE,
+} from '@/lib/pricing';
 
 interface BillingStateResponse {
   success: boolean;
@@ -17,8 +25,8 @@ interface CheckoutResponse {
   url?: string;
 }
 
-const MIN_MINUTES = 200;
-const MAX_MINUTES = 2000;
+const MIN_MINUTES = MIN_PACKAGE_MINUTES;
+const MAX_MINUTES = MAX_PACKAGE_MINUTES;
 const DEFAULT_MINUTES = 500;
 
 function clampMinutes(value: number): number {
@@ -29,7 +37,7 @@ export default function PricingSlider() {
   const [minutes, setMinutes] = useState(DEFAULT_MINUTES);
   const [minutesInput, setMinutesInput] = useState(String(DEFAULT_MINUTES));
   const [price, setPrice] = useState(calculatePackagePriceInPennies(DEFAULT_MINUTES) / 100);
-  const [tier, setTier] = useState<'Small' | 'Medium' | 'Pro'>('Medium');
+  const [tier, setTier] = useState<BillingTierName>('Medium');
   const [rate, setRate] = useState(calculatePackageRatePence(DEFAULT_MINUTES) / 100);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -258,11 +266,13 @@ export default function PricingSlider() {
             whileHover={{ scale: 1.05 }}
             transition={{ duration: 0.3 }}
             className={`px-6 py-2 rounded-full text-sm font-bold tracking-wide uppercase shadow-md flex items-center gap-2 ${
-              tier === 'Small'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                : tier === 'Medium'
-                  ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
-                  : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+              tier === 'Giris'
+                ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                : tier === 'Small'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                  : tier === 'Medium'
+                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+                    : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
             }`}
           >
             {tier} Kademe Modu

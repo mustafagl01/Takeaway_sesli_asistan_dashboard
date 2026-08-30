@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { createSubscription, getActiveSubscription, updateUser } from '@/lib/db';
 import { sql } from '@vercel/postgres';
 import {
-  buildPresetPlanName,
+  buildPackagePlanName,
   calculatePackagePriceInPennies,
   derivePaygRatePence,
   getBillingTierName,
@@ -176,7 +176,7 @@ export async function POST(req: Request) {
 
     if (metadata?.type === 'prepaid_minutes' && metadata.userId && metadata.minutes) {
       const minutes = Number.parseInt(metadata.minutes, 10);
-      const tier = (metadata.tier as 'Small' | 'Medium' | 'Pro' | undefined) || getBillingTierName(minutes);
+      const tier = metadata.tier || getBillingTierName(minutes);
       const activationMode = metadata.activationMode === 'queued' ? 'queued' : 'immediate';
       const ratePence = Math.ceil(calculatePackagePriceInPennies(minutes) / minutes);
       const paygRatePence = derivePaygRatePence(ratePence);
@@ -217,7 +217,7 @@ export async function POST(req: Request) {
         const createResult = await createSubscription({
           id: subscriptionId,
           user_id: metadata.userId,
-          plan_name: buildPresetPlanName(tier.toLowerCase() as 'small' | 'medium' | 'pro', minutes),
+          plan_name: buildPackagePlanName(minutes),
           total_minutes: minutes,
           rate_pence: ratePence,
           payg_rate_pence: paygRatePence,
